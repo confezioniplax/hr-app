@@ -1,0 +1,266 @@
+<!-- 
+  MIT License
+  
+  Copyright (c) 2024 Riccardo Leonelli
+  
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+  
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+  
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+  
+ -->
+
+{% extends "layout_manager.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="text-center mb-4">Employee Directory</h1>
+
+    <button id="addRow" class="btn btn-primary mb-3">Add New Employee</button>
+
+    <table id="peopleTable" class="table table-bordered display">
+        <thead class="thead-light">
+            <tr>
+                <th>ID</th>
+                <th>First Name</th>
+                <th>Last Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Hire Date</th>
+                <th>End Date</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+
+    <!-- Add/Edit Modal -->
+    <div id="modal" class="modal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit</h5>
+                    <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="modalForm">
+                        <div class="form-group">
+                            <label for="rowId">ID:</label>
+                            <input type="number" id="rowId" name="rowId" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="first_name">First Name:</label>
+                            <input type="text" id="first_name" name="first_name" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="last_name">Last Name:</label>
+                            <input type="text" id="last_name" name="last_name" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email:</label>
+                            <input type="email" id="email" name="email" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="role">Role:</label>
+                            <input type="text" id="role" name="role" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="hire_date">Hire Date:</label>
+                            <input type="date" id="hire_date" name="hire_date" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="end_date">End Date:</label>
+                            <input type="date" id="end_date" name="end_date" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="user_password">Password:</label>
+                            <input type="user_password" id="user_password" name="user_password" class="form-control">
+                        </div>
+                        <input type="submit" value="Save" class="btn btn-primary">
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="insertPresenceModal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalLabel">Insert Access</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="insertPresenceForm" action="/insert_presence" method="post">
+                        <input type="hidden" id="inputPersonId" name="personId">
+                        <div class="mb-3">
+                            <label for="inputTimestamp" class="form-label">Date and Time</label>
+                            <input type="datetime-local" class="form-control" id="inputTimestamp" name="timestamp"
+                                required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Register</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function () {
+            var data = {{ data | tojson
+        }};
+        data = JSON.parse(data);
+
+        // Initialize DataTable
+        var table = $('#peopleTable').DataTable({
+            data: data,
+            columns: [
+                { data: 'employee_id', title: 'Id' },
+                { data: 'first_name', title: 'First Name' },
+                { data: 'last_name', title: 'Last Name' },
+                { data: 'email', title: 'Email' },
+                { data: 'role', title: 'Role' },
+                { data: 'hire_date', title: 'Hire Date' },
+                { data: 'end_date', title: 'End Date' },
+                {
+                    data: null,
+                    defaultContent: `
+                                <button class="insertPresenceButton btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#insertPresenceModal">
+                                    Insert access                                
+                                </button>
+                                <button class="editBtn btn btn-warning btn-sm">
+                                    Edit
+                                </button> 
+                                <button class="deleteBtn btn btn-danger btn-sm">
+                                    Delete
+                                </button>
+                        `
+                }
+            ]
+        });
+
+        // Add row button functionality
+        $('#addRow').on('click', function () {
+            $('#rowId').val('');
+            $('#first_name').val('');
+            $('#last_name').val('');
+            $('#email').val('');
+            $('#role').val('');
+            $('#hire_date').val('');
+            $('#end_date').val('');
+            $('#user_password').val('');
+            $('#modal').modal('show');
+        });
+
+        // Edit row button functionality
+        $('#peopleTable tbody').on('click', 'button.editBtn', function () {
+            var rowData = table.row($(this).parents('tr')).data();
+            $('#rowId').val(rowData.employee_id);
+            $('#first_name').val(rowData.first_name);
+            $('#last_name').val(rowData.last_name);
+            $('#email').val(rowData.email);
+            $('#role').val(rowData.role);
+            $('#hire_date').val(rowData.hire_date);
+            $('#end_date').val(rowData.end_date);
+            $('#user_password').val(''); 
+            $('#modal').modal('show');
+        });
+
+
+    $('#modalForm').on('submit', function (e) {
+        e.preventDefault();
+        var formData = $(this).serialize();
+        console.log("Form Data Submitted: ", formData);  
+        $.ajax({
+            type: 'POST',
+            url: '/add_or_update_person',
+            data: formData,
+            success: function (response) {
+                alert('Operation successful');
+                $('#modal').modal('hide');
+                window.location.reload()
+            },
+            error: function (error) {
+                console.error('Error: ', error);
+                alert('An error occurred');
+            }
+        });
+    });
+
+
+        function reloadData() {
+            $.ajax({
+                type: 'GET',
+                url: '/reload-data',
+                success: function (response) {
+                    table.clear().rows.add(response.data).draw();
+                },
+                error: function (error) {
+                    console.log('Error reloading data:', error);
+                }
+            });
+        }
+
+        // Delete row button functionality
+        $('#peopleTable tbody').on('click', 'button.deleteBtn', function () {
+            var rowData = table.row($(this).parents('tr')).data();
+            var idToDelete = rowData.employee_id;
+            if (confirm('Proceed with deletion?')) {
+                $.ajax({
+                    type: 'POST',
+                    url: '/delete_person',
+                    data: { rowId: idToDelete },
+                    success: function (response) {
+                        alert('Successfully deleted');
+                        window.re
+                    },
+                    error: function (error) {
+                        alert('Error');
+                    }
+                });
+            }
+        });
+
+        $('#peopleTable tbody').on('click', 'button.insertPresenceButton', function () {
+            var rowData = table.row($(this).parents('tr')).data();
+            $('#inputPersonId').val(rowData.ID); // Set the person ID in the modal form
+            $('#insertPresenceModal').modal('show');
+        });
+
+        // Handle submission of the insert presence form
+        $('#insertPresenceForm').on('submit', function (e) {
+            e.preventDefault();
+            var formData = $(this).serialize();
+            $.ajax({
+                type: 'POST',
+                url: '/insert_presence',
+                data: formData,
+                success: function (response) {
+                    alert('Presence successfully inserted');
+                    $('#insertPresenceModal').modal('hide');
+                    window.location.reload()
+                },
+                error: function (error) {
+                    alert('Error during presence insertion');
+                }
+            });
+        });
+        });
+    </script>
+
+    {% endblock %}

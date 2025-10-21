@@ -1,0 +1,81 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Build Docker image
+        run: docker build -t ${{ github.event.repository.name }}:${{ github.ref_name }} .
+
+      - name: Save Docker image
+        run: docker save -o my_image.tar ${{ github.event.repository.name }}:${{ github.ref_name }}
+
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: my_image
+          path: my_image.tar
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: my_image
+
+      - name: Load Docker image
+        run: docker load -i my_image.tar
+
+      - name: Run tests
+        run: docker run ${{ github.event.repository.name }}:${{ github.ref_name }} pytest
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: my_image
+
+      - name: Load Docker image
+        run: docker load -i my_image.tar
+
+      - name: Login to Harbor registry
+        env:
+          HARBOR_REGISTRY: ${{ secrets.HARBOR_REGISTRY }}
+          HARBOR_USER: ${{ secrets.HARBOR_USER }}
+          HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+        run: echo ${{ secrets.HARBOR_PASSWORD }} | docker login "${{ secrets.HARBOR_REGISTRY }}" -u "${{ secrets.HARBOR_USER }}" --password-stdin
+
+      - name: Tag Docker image
+        run: docker tag ${{ github.event.repository.name }}:${{ github.ref_name }} ${{ secrets.HARBOR_REGISTRY }}/${{ github.event.repository.name }}/${{ github.event.repository.name }}:${{ github.ref_name }}
+
+      - name: Push Docker image
+        run: docker push ${{ secrets.HARBOR_REGISTRY }}/${{ github.event.repository.name }}/${{ github.event.repository.name }}:${{ github.ref_name }}
+
+  cleanup:
+    runs-on: ubuntu-latest
+    needs: publish
+    if: always()
+    steps:
+      - name: Remove local Docker images
+        run: |
+          docker rmi --force ${{ github.event.repository.name }}:${{ github.ref_name }}
+          docker rmi --force ${{ secrets.HARBOR_REGISTRY }}/${{ github.event.repository.name }}/${{ github.event.repository.name }}:${{ github.ref_name }}

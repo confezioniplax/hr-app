@@ -1,0 +1,260 @@
+{% extends "layout_manager.html" %}
+{% block content %}
+<div class="container-fluid mt-4">
+        <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="mb-0">Dashboard HR — <span class="text-primary">Anagrafica</span></h2>
+            <div class="small text-muted">Plax Packaging srl — Savignano sul Rubicone</div>
+        </div>
+        <div class="d-flex gap-2">
+            <!-- NUOVO: bottone per creare una nuova anagrafica -->
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#newOpModal">+ Nuovo
+                operatore</button>
+            <!-- <a href="/home-operators" class="btn btn-outline-secondary">← Torna alla Home</a> -->
+        </div>
+    </div>
+
+    <!-- FILTRI -->
+    <form id="anagFilterForm" class="mb-3">
+        <div class="row g-2">
+            <div class="col-12 col-md-5">
+                <label class="form-label">Cerca (nome/cognome/CF)</label>
+                <input type="text" class="form-control" name="q" value="{{ q or '' }}"
+                    placeholder="es. Rossi Mario, RSSMRA...">
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label">Reparto</label>
+                <select class="form-select" name="department_id" id="filterDeptAnag">
+                    <option value="">Tutti…</option>
+                    {% for d in departments or [] %}
+                    <option value="{{ d.id }}" {% if selected_department_id and d.id==selected_department_id
+                        %}selected{% endif %}>{{ d.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-2">
+                <label class="form-label">Attivo</label>
+                <select class="form-select" name="active">
+                    <option value="">Tutti</option>
+                    <option value="1" {% if active=='1' %}selected{% endif %}>Sì</option>
+                    <option value="0" {% if active=='0' %}selected{% endif %}>No</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-1 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Mostra</button>
+            </div>
+        </div>
+    </form>
+
+    <!-- TABELLA -->
+    <div class="table-responsive">
+        <table id="operatorsTable" class="table table-bordered display w-100">
+            <thead class="thead-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Operatore</th>
+                    <th>Reparti</th>
+                    <th>Telefono</th>
+                    <th>Email</th>
+                    <th>CF</th>
+                    <th>Nascita</th>
+                    <th>Assunzione</th>
+                    <th>Tipo contratto</th>
+                    <th>Scadenza</th>
+                    <th>Livello</th>
+                    <th>RAL</th>
+                    <th>Stato</th>
+                    <th>Azioni</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODALE: Nuovo operatore -->
+<div class="modal fade" id="newOpModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nuovo operatore</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newOpForm" class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label">Nome</label>
+                        <input name="first_name" class="form-control" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Cognome</label>
+                        <input name="last_name" class="form-control" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">CF</label>
+                        <input name="fiscal_code" class="form-control">
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Telefono</label>
+                        <input name="phone" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Email</label>
+                        <input name="email" type="email" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Residenza</label>
+                        <input name="address" class="form-control" placeholder="via/piazza, n°, città">
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Nascita</label>
+                        <input name="birth_date" type="date" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Assunzione</label>
+                        <input name="hire_date" type="date" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Tipo contratto</label>
+                        <input name="contract_type" class="form-control" placeholder="es. Indeterminato, Apprendistato">
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Scadenza contratto</label>
+                        <input name="contract_expiry" type="date" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Livello</label>
+                        <input name="level" class="form-control" placeholder="es. 4, 4S, Q">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">RAL (€)</label>
+                        <input name="ral" class="form-control" placeholder="es. 35.500,00">
+                    </div>
+
+                    <div class="col-md-8">
+                        <label class="form-label">Reparti (facoltativo)</label>
+                        <input name="departments" class="form-control" placeholder="es. Estrusione; Stampa">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Stato</label>
+                        <select name="active" class="form-select">
+                            <option value="1">Attivo</option>
+                            <option value="0">Non attivo</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button id="createOpBtn" type="button" class="btn btn-primary">Crea</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script>
+    $(function () {
+        // opzionale: se il server pre-renderizza dati
+        const operatorsData = {{ (operators_data | default ([])) | tojson | safe }};
+
+    function buildAnagParams() {
+        const q = $('input[name="q"]').val().trim();
+        const dep = $('#filterDeptAnag').val();
+        const act = $('select[name="active"]').val();
+        const p = {};
+        if (q) p.q = q;
+        if (dep && dep !== '') p.department_id = Number(dep);
+        if (act === '0' || act === '1') p.active = Number(act);
+        return p;
+    }
+
+    const opTable = $('#operatorsTable').DataTable({
+        autoWidth: false,
+        data: Array.isArray(operatorsData) ? operatorsData : [],
+        columns: [
+            { data: 'id', title: 'ID', width: '60px' },
+            { data: 'operator_name', title: 'Operatore' },
+            { data: 'departments', title: 'Reparti', defaultContent: '' },
+            { data: 'phone', title: 'Telefono', defaultContent: '' },
+            { data: 'email', title: 'Email', defaultContent: '' },
+            { data: 'fiscal_code', title: 'CF', defaultContent: '' },
+            { data: 'birth_date', title: 'Nascita', defaultContent: '' },
+            { data: 'hire_date', title: 'Assunzione', defaultContent: '' },
+            { data: 'contract_type', title: 'Tipo contratto', defaultContent: '' },
+            { data: 'contract_expiry', title: 'Scadenza', defaultContent: '' },
+            { data: 'level', title: 'Livello', defaultContent: '' },
+            { data: 'ral', title: 'RAL', defaultContent: '', render: v => v ?? '' },
+            {
+                data: 'active', title: 'Stato', render: v => v
+                    ? '<span class="badge bg-success">Attivo</span>'
+                    : '<span class="badge bg-secondary">Non attivo</span>'
+            },
+            {
+                data: null, title: 'Azioni', orderable: false, render: d => `
+          <div class="btn-group btn-group-sm">
+            <a class="btn btn-info" href="/hr/operators/${d.id}">Dettaglio</a>
+            <a class="btn btn-outline-primary" href="/hr/operators/${d.id}?addCert=1">Aggiungi cert.</a>
+          </div>`
+            }
+        ],
+        pageLength: 25
+    });
+
+    $('#anagFilterForm').on('submit', function (e) {
+        e.preventDefault();
+        $.getJSON('/api/hr/operators/list', buildAnagParams(), function (list) {
+            opTable.clear().rows.add(list).draw();
+        }).fail(xhr => {
+            console.error('Errore /api/hr/operators/list', xhr?.responseText || xhr);
+            alert('Errore nel caricamento della lista operatori');
+        });
+    });
+
+    if (!Array.isArray(operatorsData) || operatorsData.length === 0) {
+        $.getJSON('/api/hr/operators/list', buildAnagParams(), function (list) {
+            opTable.clear().rows.add(list).draw();
+        });
+    }
+
+    // Crea nuovo operatore → POST /api/hr/operators/create → redirect al dettaglio
+    $('#createOpBtn').on('click', function () {
+        const form = $('#newOpForm').serialize();
+        $('#createOpBtn').prop('disabled', true);
+        $.post('/api/hr/operators/create', form)
+            .done(function (res) {
+                const id = res?.id;
+                if (id) {
+                    window.location.href = `/hr/operators/${id}`;
+                } else {
+                    alert('Operatore creato ma non ho ricevuto l’ID.');
+                    $('#newOpModal').modal('hide');
+                    $('#anagFilterForm').trigger('submit');
+                }
+            })
+            .fail(function (xhr) {
+                alert('Errore creazione operatore: ' + (xhr?.responseJSON?.detail || xhr?.responseText || ''));
+            })
+            .always(() => $('#createOpBtn').prop('disabled', false));
+    });
+});
+</script>
+{% endblock %}
+
++ <style>
+    
+
+    /* assicura che DataTables non si restringa */
+    #operatorsTable.dataTable,
+    #operatorsTable {
+        width: 100% !important;
+    }
+
+    
+</style>

@@ -1,0 +1,113 @@
+{% extends "layout_manager.html" %} {# o layout_manager.html se vuoi la stessa navbar #}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <h2 class="mb-1">Benvenuto</h2>
+            <p class="text-muted">Scegli il reparto per compilare il report produzione giornaliero</p>
+        </div>
+    </div>
+
+    <form id="deptForm" class="mx-auto" style="max-width: 720px;">
+        <div class="row g-3 align-items-end">
+            <div class="col-12 col-md-6">
+                <label class="form-label">Data</label>
+                <input type="date" id="dateInput" class="form-control" required>
+                <small class="text-muted">Verrà passata alla pagina del reparto.</small>
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label">Reparto</label>
+                <select id="deptSelect" class="form-select" required>
+                    <option value="">Seleziona…</option>
+                    <option value="STAMPA">STAMPA</option>
+                    <option value="TAGLIO">TAGLIO</option>
+                    <option value="ACCOPPIAMENTO">ACCOPPIAMENTO</option>
+                </select>
+            </div>
+            <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Vai</button>
+                <a href="/" class="btn btn-outline-secondary">Annulla</a>
+            </div>
+        </div>
+    </form>
+
+    <hr class="my-4">
+
+    <!-- Scorciatoie con card -->
+    <div class="row g-3">
+        <div class="col-12 col-md-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title mb-1">STAMPA</h5>
+                    <p class="text-muted flex-grow-1 mb-3">Mod. 021 S — inserisci colori, lato INT/EST, avviamento,
+                        bonifica e punti luce.</p>
+                    <button class="btn btn-outline-primary mt-auto quick-link" data-target="/jobs/stampa">Apri</button>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title mb-1">TAGLIO</h5>
+                    <p class="text-muted flex-grow-1 mb-3">Mod. 021 T — controllo lame, bonifica, lame sostituite.</p>
+                    <button class="btn btn-outline-primary mt-auto quick-link" data-target="/jobs/taglio">Apri</button>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title mb-1">ACCOPPIAMENTO</h5>
+                    <p class="text-muted flex-grow-1 mb-3">Mod. 021 A — % impostazione, bonifica, punti luce/monitor,
+                        plastiche dure.</p>
+                    <button class="btn btn-outline-primary mt-auto quick-link"
+                        data-target="/jobs/accoppiamento">Apri</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    (function () {
+        // precompila data a oggi (formato yyyy-mm-dd)
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const today = `${yyyy}-${mm}-${dd}`;
+        const dateInput = document.getElementById('dateInput');
+        if (dateInput && !dateInput.value) dateInput.value = today;
+
+        // mappa reparto -> route
+        const routes = {
+            'STAMPA': '/jobs/stampa',
+            'TAGLIO': '/jobs/taglio',
+            'ACCOPPIAMENTO': '/jobs/accoppiamento'
+        };
+
+        // submit del form
+        document.getElementById('deptForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const dept = document.getElementById('deptSelect').value;
+            const date = document.getElementById('dateInput').value || today;
+            if (!dept || !routes[dept]) return;
+            // redirect con querystring ?date=…
+            window.location.href = `${routes[dept]}?date=${encodeURIComponent(date)}`;
+        });
+
+        // scorciatoie card "Apri"
+        document.querySelectorAll('.quick-link').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const target = this.getAttribute('data-target');
+                const date = document.getElementById('dateInput').value || today;
+                window.location.href = `${target}?date=${encodeURIComponent(date)}`;
+            });
+        });
+    })();
+</script>
+{% endblock %}

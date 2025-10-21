@@ -1,0 +1,352 @@
+{% extends "layout_manager.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex align-items-center mb-3">
+        <h2 class="mb-0 me-3">Dettaglio Scheda</h2>
+        <span class="badge bg-secondary" id="badgeId">ID: …</span>
+        <div class="ms-auto">
+            <a href="/jobs" class="btn btn-outline-secondary btn-sm">← Torna alla lista</a>
+        </div>
+    </div>
+
+    <!-- INFO PRINCIPALI -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label text-muted">Data</label>
+                    <div id="fldDate" class="fw-semibold">—</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted">Tipo processo</label>
+                    <div id="fldProcess" class="fw-semibold">—</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label text-muted">Macchina</label>
+                    <div id="fldMachine" class="fw-semibold">—</div>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label text-muted">Cliente</label>
+                    <div id="fldClient" class="fw-semibold">—</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label text-muted">Articolo</label>
+                    <div id="fldArticle" class="fw-semibold">—</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label text-muted">Lotto</label>
+                    <div id="fldLot" class="fw-semibold">—</div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label text-muted">Ora inizio</label>
+                    <div id="fldStart" class="fw-semibold">—</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted">Ora fine</label>
+                    <div id="fldEnd" class="fw-semibold">—</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted">Turno</label>
+                    <div id="fldShift" class="fw-semibold">—</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted">Metri prodotti</label>
+                    <div id="fldMeters" class="fw-semibold">—</div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label text-muted">Scarto (m)</label>
+                    <div id="fldScrapM" class="fw-semibold">—</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted">Scarto (kg)</label>
+                    <div id="fldScrapKg" class="fw-semibold">—</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted">MT Avviamento</label>
+                    <div id="fldSetup" class="fw-semibold">—</div>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label text-muted">Note</label>
+                    <div id="fldNotes" class="fw-semibold">—</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- OPERATORI -->
+    <div class="card mb-3">
+        <div class="card-header">Operatori</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Cognome</th>
+                            <th>Nome</th>
+                            <th>Ruolo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tblOps">
+                        <tr>
+                            <td colspan="4" class="text-muted">Nessun operatore</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTROLLI QUALITÀ -->
+    <div class="card mb-3">
+        <div class="card-header">Controlli qualità</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Check</th>
+                            <th>Esito</th>
+                            <th>Valore</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tblQC">
+                        <tr>
+                            <td colspan="3" class="text-muted">Nessun controllo</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MATERIALI -->
+    <div class="card mb-3">
+        <div class="card-header">Materiali</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Nome</th>
+                            <th>Lotto</th>
+                            <th>Quantità</th>
+                            <th>Unità</th>
+                            <th>Set%</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tblMat">
+                        <tr>
+                            <td colspan="6" class="text-muted">Nessun materiale</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONSUMABILI -->
+    <div class="card mb-3">
+        <div class="card-header">Consumabili</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Quantità</th>
+                            <th>Unità</th>
+                            <th>Note</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tblCons">
+                        <tr>
+                            <td colspan="4" class="text-muted">Nessun consumabile</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- EVENTI -->
+    <div class="card mb-3">
+        <div class="card-header">Eventi (fermi / scarti)</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Motivo</th>
+                            <th>Minuti</th>
+                            <th>m</th>
+                            <th>kg</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tblEvt">
+                        <tr>
+                            <td colspan="5" class="text-muted">Nessun evento</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- PROPRIETÀ EXTRA -->
+    <div class="card mb-4">
+        <div class="card-header">Proprietà extra</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Chiave</th>
+                            <th>Valore</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tblProps">
+                        <tr>
+                            <td colspan="2" class="text-muted">Nessuna proprietà</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    // legge l'id dal path /jobs/detail/{id}
+    function getJobIdFromPath() {
+        const parts = window.location.pathname.split('/');
+        return parts[parts.length - 1];
+    }
+
+    function fmt(v, def = '—') {
+        if (v === null || v === undefined || v === '') return def;
+        return v;
+    }
+
+    (async function () {
+        const jobId = getJobIdFromPath();
+        document.getElementById('badgeId').textContent = 'ID: ' + jobId;
+
+        const resp = await fetch(`/api/jobs/detail?job_id=${encodeURIComponent(jobId)}`);
+        if (!resp.ok) {
+            alert('Errore nel recupero del dettaglio');
+            return;
+        }
+        const d = await resp.json();
+
+        // header
+        document.getElementById('fldDate').textContent = fmt(d.job_date);
+        document.getElementById('fldProcess').textContent = fmt(d.process_type);
+        document.getElementById('fldMachine').textContent = `[${fmt(d.machine_code)}] ${fmt(d.machine_name, '')}`;
+        document.getElementById('fldClient').textContent = fmt(d.client_name);
+        document.getElementById('fldArticle').textContent = (d.article_code ? d.article_code : '') + (d.article_description ? ` — ${d.article_description}` : '');
+        document.getElementById('fldLot').textContent = fmt(d.lot_code || d.lot_id);
+        document.getElementById('fldStart').textContent = fmt(d.start_time);
+        document.getElementById('fldEnd').textContent = fmt(d.end_time);
+        document.getElementById('fldShift').textContent = fmt(d.shift_label);
+        document.getElementById('fldMeters').textContent = fmt(d.meters_produced);
+        document.getElementById('fldScrapM').textContent = fmt(d.scrap_meters);
+        document.getElementById('fldScrapKg').textContent = fmt(d.scrap_kg);
+        document.getElementById('fldSetup').textContent = fmt(d.setup_meters);
+        document.getElementById('fldNotes').textContent = fmt(d.notes, '');
+
+        // operatori
+        const ops = Array.isArray(d.operators) ? d.operators : [];
+        const opsT = document.getElementById('tblOps');
+        opsT.innerHTML = ops.length ? '' : '<tr><td colspan="4" class="text-muted">Nessun operatore</td></tr>';
+        ops.forEach((o, i) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+        <td>${i + 1}</td>
+        <td>${fmt(o.last_name, '')}</td>
+        <td>${fmt(o.first_name, '')}</td>
+        <td>${fmt(o.role, '')}</td>`;
+            opsT.appendChild(tr);
+        });
+
+        // quality checks
+        const qcs = Array.isArray(d.quality_checks) ? d.quality_checks : [];
+        const qcT = document.getElementById('tblQC');
+        qcT.innerHTML = qcs.length ? '' : '<tr><td colspan="3" class="text-muted">Nessun controllo</td></tr>';
+        qcs.forEach(q => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+        <td>${fmt(q.check_type_code || q.check_type, '')}</td>
+        <td>${fmt(q.result, '')}</td>
+        <td>${fmt(q.value_text, '')}</td>`;
+            qcT.appendChild(tr);
+        });
+
+        // materiali
+        const mats = Array.isArray(d.materials) ? d.materials : [];
+        const matT = document.getElementById('tblMat');
+        matT.innerHTML = mats.length ? '' : '<tr><td colspan="6" class="text-muted">Nessun materiale</td></tr>';
+        mats.forEach(m => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+        <td>${fmt(m.material_type, '')}</td>
+        <td>${fmt(m.material_name, '')}</td>
+        <td>${fmt(m.lot_number, '')}</td>
+        <td>${fmt(m.quantity, '')}</td>
+        <td>${fmt(m.unit, '')}</td>
+        <td>${fmt(m.setpoint_value, '')}</td>`;
+            matT.appendChild(tr);
+        });
+
+        // consumabili
+        const cons = Array.isArray(d.consumables) ? d.consumables : [];
+        const consT = document.getElementById('tblCons');
+        consT.innerHTML = cons.length ? '' : '<tr><td colspan="4" class="text-muted">Nessun consumabile</td></tr>';
+        cons.forEach(c => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+        <td>${fmt(c.consumable_type, '')}</td>
+        <td>${fmt(c.quantity, '')}</td>
+        <td>${fmt(c.unit, '')}</td>
+        <td>${fmt(c.notes, '')}</td>`;
+            consT.appendChild(tr);
+        });
+
+        // eventi
+        const evs = Array.isArray(d.events) ? d.events : [];
+        const evtT = document.getElementById('tblEvt');
+        evtT.innerHTML = evs.length ? '' : '<tr><td colspan="5" class="text-muted">Nessun evento</td></tr>';
+        evs.forEach(e => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+        <td>${fmt(e.event_type, '')}</td>
+        <td>${fmt(e.reason, '')}</td>
+        <td>${fmt(e.minutes, '')}</td>
+        <td>${fmt(e.quantity_m, '')}</td>
+        <td>${fmt(e.quantity_kg, '')}</td>`;
+            evtT.appendChild(tr);
+        });
+
+        // proprietà
+        const props = Array.isArray(d.properties) ? d.properties : [];
+        const propT = document.getElementById('tblProps');
+        propT.innerHTML = props.length ? '' : '<tr><td colspan="2" class="text-muted">Nessuna proprietà</td></tr>';
+        props.forEach(p => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+        <td>${fmt(p.prop_key, '')}</td>
+        <td>${fmt(p.prop_value, '')}</td>`;
+            propT.appendChild(tr);
+        });
+    })();
+</script>
+{% endblock %}

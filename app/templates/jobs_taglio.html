@@ -1,0 +1,360 @@
+{% extends "layout_manager.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0">Report Produzione — <span class="text-primary">TAGLIO</span></h2>
+        <div class="small text-muted">Mod. 021 T</div>
+        <div class="d-flex gap-2">
+            <a href="/home-operators" class="btn btn-outline-secondary">
+                ← Torna alla Home
+            </a>
+        </div>
+    </div>
+
+    <!-- FILTRI -->
+    <form id="jobsFilterForm" class="mb-3" action="/jobs/taglio" method="get">
+        <div class="row g-2">
+            <div class="col-12 col-md-3">
+                <label class="form-label">Data</label>
+                <input type="date" id="filterDate" name="date" class="form-control" value="{{ selected_date or '' }}"
+                    required />
+            </div>
+            <div class="col-12 col-md-5">
+                <label class="form-label">Macchina (reparto: TAGLIO)</label>
+                <select id="filterMachine" name="machine_id" class="form-select">
+                    <option value="">Tutte le macchine di Taglio…</option>
+                    {% for m in machines %}
+                    <option value="{{ m.id }}" {% if selected_machine and selected_machine==m.id %}selected{% endif %}>
+                        [{{ m.code }}] {{ m.name or '' }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary me-2">Mostra</button>
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#newJobModal">
+                    Nuova riga
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <!-- TABELLA: aderente alla scansione -->
+    <table id="jobsTable" class="table table-bordered display w-100">
+        <thead class="thead-light">
+            <tr>
+                <th>ID</th>
+                <th>Macchina</th>
+                <th>Ore (dalle–alle)</th>
+                <th>Lotto</th>
+                <th>Cliente/Soggetto/Articolo</th>
+                <th>MT Prodotti</th>
+                <th>Scarto (m)</th>
+                <th>Scarto (kg)</th>
+                <th>Ctrl. lame</th>
+                <th>Bonifica</th>
+                <th>Lame sost.</th>
+                <th>Note</th>
+                <th>Azioni</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- MODALE NUOVA RIGA — TAGLIO -->
+<div class="modal fade" id="newJobModal" tabindex="-1" aria-labelledby="newJobLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 id="newJobLabel" class="modal-title">Nuova riga — TAGLIO</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newJobForm">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Data</label>
+                            <input type="date" name="job_date" class="form-control" value="{{ selected_date or '' }}"
+                                required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Processo</label>
+                            <input type="text" class="form-control" value="TAGLIO" readonly>
+                            <input type="hidden" name="process_type" value="TAGLIO">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Macchina (TAGLIO)</label>
+                            <select name="machine_id" class="form-select" required id="machineSelectModal">
+                                <option value="">Seleziona…</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Operatore</label>
+                            <select id="operatorMainSelect" class="form-select" required>
+                                <option value="">Seleziona operatore…</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Operatore aggiuntivo (opz.)</label>
+                            <select id="operatorExtraSelect" class="form-select" multiple></select>
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label">Produzione — dalle</label>
+                            <input type="time" name="start_time" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Produzione — alle</label>
+                            <input type="time" name="end_time" class="form-control">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Lotto</label>
+                            <input type="text" name="lot_code" class="form-control" placeholder="es. 25-OC1589-1"
+                                required>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Cliente / Soggetto / Articolo</label>
+                            <input type="text" name="client_name" class="form-control" placeholder="Cliente / articolo"
+                                required>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">MT Prodotti</label>
+                            <input type="number" name="meters_produced" class="form-control" min="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Scarto (m)</label>
+                            <input type="number" step="0.01" name="scrap_m" id="scrap_m" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Scarto (kg)</label>
+                            <input type="number" step="0.01" name="scrap_kg" id="scrap_kg" class="form-control">
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label">Controllo lame</label>
+                            <select class="form-select qc-field" data-qc-code="CONTROLLO_LAME">
+                                <option value="">—</option>
+                                <option value="OK">OK</option>
+                                <option value="KO">KO</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Bonifica linea</label>
+                            <select class="form-select qc-field" data-qc-code="BONIFICA_LINEA">
+                                <option value="">—</option>
+                                <option value="OK">OK</option>
+                                <option value="KO">KO</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">N° Lame sostituite</label>
+                            <input type="number" class="form-control cons-lame-qty" placeholder="pz">
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label">Turno</label>
+                            <input type="text" name="shift_label" id="shiftField" class="form-control"
+                                placeholder="MATTINA/POM/SERA" readonly>
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label">Note (cause eccesso scarto / fermi macchina)</label>
+                            <textarea name="notes" class="form-control" rows="2" placeholder="Note"></textarea>
+                        </div>
+
+                        <div class="col-12">
+                            <hr class="my-2">
+                        </div>
+
+                        <!-- Piede modulo -->
+                        <div class="col-md-6">
+                            <label class="form-label">Controllo punti luce bordo macchina e monitor e plastiche
+                                dure</label>
+                            <select class="form-select" id="footerPL_PD">
+                                <option value="">—</option>
+                                <option value="POSITIVO">POSITIVO</option>
+                                <option value="NEGATIVO">NEGATIVO</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">N° lame scartate (giorno)</label>
+                            <input type="number" id="footerNLameScartate" class="form-control" placeholder="pz">
+                        </div>
+
+                    </div>
+
+                    <!-- HIDDEN PAYLOADS -->
+                    <input type="hidden" name="operator_ids" id="operatorIdsHidden">
+                    <input type="hidden" name="quality_checks" id="qcHidden">
+                    <input type="hidden" name="materials" id="materialsHidden">
+                    <input type="hidden" name="consumables" id="consumablesHidden">
+                    <input type="hidden" name="events" id="eventsHidden">
+                    <input type="hidden" name="properties" id="propsHidden">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="saveJobBtn" class="btn btn-primary">Salva</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+
+<script>
+    $(function () {
+        // ===== TABELLA GIORNO =====
+        var data = {{ data | tojson | safe
+    }}; data = data ? JSON.parse(data) : [];
+    var table = $('#jobsTable').DataTable({
+        data: data,
+        columns: [
+            { data: null, title: 'ID', render: d => (d.id ?? d.job_id) },
+            { data: null, title: 'Macchina', render: d => `[${d.machine_code}] ${d.machine_name || ''}` },
+            { data: null, title: 'Ore', render: d => (d.start_time && d.end_time) ? `${d.start_time}–${d.end_time}` : '' },
+            { data: 'lot_code', title: 'Lotto', defaultContent: '' },
+            { data: 'client_name', title: 'Cliente/Soggetto/Articolo', defaultContent: '' },
+            { data: 'meters_produced', title: 'MT Prodotti', defaultContent: '' },
+            { data: 'scrap_meters', title: 'Scarto (m)', defaultContent: '' },
+            { data: 'scrap_kg', title: 'Scarto (kg)', defaultContent: '' },
+            { data: 'qc_lame', title: 'Ctrl. lame', defaultContent: '' },
+            { data: 'qc_bonifica', title: 'Bonifica', defaultContent: '' },
+            { data: 'lame_sost', title: 'Lame sost.', defaultContent: '' },
+            { data: 'notes', title: 'Note', render: d => d ? (d.length > 30 ? d.substring(0, 30) + '…' : d) : '' },
+            { data: null, title: 'Azioni', defaultContent: `<button class="btn btn-info btn-sm viewBtn">Dettaglio</button>` }
+        ]
+    });
+    $('#jobsTable tbody').on('click', 'button.viewBtn', function () {
+        const row = table.row($(this).parents('tr')).data();
+        const jid = row.id ?? row.job_id;
+        if (!jid) return alert('ID job non presente');
+        window.location.href = '/jobs/detail/' + jid;
+    });
+
+    // ===== META: MACCHINE & OPERATORI TAGLIO =====
+    const DEPT_TAGLIO = 2;
+    function loadMachinesTaglio() {
+        $.getJSON('/api/jobs/meta/machines', function (list) {
+            var $sel = $('#machineSelectModal').empty().append('<option value="">Seleziona…</option>');
+            list.filter(m => (m.department_id ? Number(m.department_id) === DEPT_TAGLIO : true))
+                .forEach(function (m) {
+                    $sel.append(`<option value="${m.id}">[${m.code}] ${m.name || ''}</option>`);
+                });
+            const current = $('#filterMachine').val();
+            if (current) $sel.val(current);
+        });
+    }
+    function loadOperatorsTaglio() {
+        $.getJSON('/api/jobs/meta/operators?department_id=' + DEPT_TAGLIO, function (list) {
+            const $main = $('#operatorMainSelect').empty().append('<option value="">Seleziona operatore…</option>');
+            const $extra = $('#operatorExtraSelect').empty();
+            list.forEach(function (o) {
+                const label = `${o.last_name} ${o.first_name}`;
+                $main.append(`<option value="${o.id}">${label}</option>`);
+                $extra.append(`<option value="${o.id}">${label}</option>`);
+            });
+        });
+    }
+
+    $('#newJobModal').on('show.bs.modal', function () {
+        loadMachinesTaglio();
+        loadOperatorsTaglio();
+        // reset hidden
+        $('#operatorIdsHidden,#qcHidden,#materialsHidden,#consumablesHidden,#eventsHidden,#propsHidden').val('');
+        $('#shiftField').val('');
+    });
+
+    // ===== UTIL =====
+    function numOrNull(v) { if (v === undefined || v === null || v === '') return null; const n = Number(v); return isNaN(n) ? null : n; }
+    function determineShiftFromTime(hhmm) {
+        if (!hhmm || !/^\d{2}:\d{2}$/.test(hhmm)) return '';
+        const h = parseInt(hhmm.split(':')[0], 10);
+        if (h >= 6 && h < 14) return 'MATTINA';
+        if (h >= 14 && h < 21) return 'POMERIGGIO';
+        return 'SERA';
+    }
+
+    // ===== SALVATAGGIO =====
+    $('#saveJobBtn').on('click', function () {
+        // operatori: principale + extra
+        const mainOp = $('#operatorMainSelect').val();
+        const extras = $('#operatorExtraSelect').val() || [];
+        const set = new Set(); if (mainOp) set.add(mainOp); extras.forEach(x => set.add(x));
+        $('#operatorIdsHidden').val(JSON.stringify(Array.from(set)));
+
+        // QC per riga
+        const qc = [];
+        const lame = $('select[data-qc-code="CONTROLLO_LAME"]').val();
+        const bon = $('select[data-qc-code="BONIFICA_LINEA"]').val();
+        if (lame) qc.push({ check_type_code: 'CONTROLLO_LAME', result: lame });
+        if (bon) qc.push({ check_type_code: 'BONIFICA_LINEA', result: bon });
+
+        // Piede modulo (valore unico per entrambi i controlli)
+        const footerVal = $('#footerPL_PD').val();
+        if (footerVal) {
+            qc.push({ check_type_code: 'PUNTI_LUCE_BORDO', result: footerVal });
+            qc.push({ check_type_code: 'PLASTICHE_DURE', result: footerVal });
+        }
+        $('#qcHidden').val(JSON.stringify(qc));
+
+        // Consumo: n° lame sostituite -> consumabile LAME pz (per riga)
+        const lameQty = numOrNull($('.cons-lame-qty').val());
+        const consumables = (lameQty !== null) ? [{ consumable_type: 'LAME', quantity: lameQty, unit: 'pz', notes: null }] : [];
+        $('#consumablesHidden').val(JSON.stringify(consumables));
+
+        // Materiali: nessuno per Taglio
+        $('#materialsHidden').val(JSON.stringify([]));
+
+        // Eventi: non gestiti qui
+        $('#eventsHidden').val(JSON.stringify([]));
+
+        // Proprietà extra: N° lame scartate (giorno)
+        const lameScartate = numOrNull($('#footerNLameScartate').val());
+        const props = [];
+        if (lameScartate !== null) props.push({ prop_key: 'N_LAME_SCARTATE_GIORNO', prop_value: String(lameScartate) });
+        $('#propsHidden').val(JSON.stringify(props));
+
+        // turno da start_time
+        const start = document.querySelector('#newJobForm input[name="start_time"]').value || '';
+        if (!document.querySelector('input[name="shift_label"]')) {
+            $('<input>').attr({ type: 'hidden', name: 'shift_label', id: 'shiftHidden' }).appendTo('#newJobForm');
+        }
+        $('#shiftField').val(determineShiftFromTime(start));
+        $('#shiftHidden').val($('#shiftField').val());
+
+        // POST
+        $.ajax({
+            type: 'POST',
+            url: '/api/jobs/create',
+            data: $('#newJobForm').serialize(),
+            success: function (resp) {
+                alert('Riga creata (ID: ' + resp.job_id + ')');
+                $('#newJobModal').modal('hide');
+
+                // ricostruisco l’URL evitando machine_id vuoto
+                const d = $('#filterDate').val() || '';
+                const mid = $('#filterMachine').val();
+                let url = window.location.pathname + '?date=' + encodeURIComponent(d);
+                if (mid && String(mid).trim() !== '') {
+                    url += '&machine_id=' + encodeURIComponent(mid);
+                }
+                window.location.href = url;
+            },
+
+            error: function (err) {
+                console.error(err);
+                alert('Errore creazione riga');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

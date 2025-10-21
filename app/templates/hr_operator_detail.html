@@ -1,0 +1,362 @@
+{% extends layout or "layout_manager.html" %}
+{% block content %}
+<div class="container-fluid mt-4" data-operator-id="{{ operator_id }}">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0">Scheda Operatore #{{ operator_id }}</h2>
+        <a href="/hr/certificazioni" class="btn btn-outline-secondary">← Torna</a>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header fw-bold">Anagrafica</div>
+        <div class="card-body">
+            <form id="anagForm" class="row g-3">
+                <input type="hidden" name="id" id="op_id" value="{{ operator_id }}">
+
+                <div class="col-md-3">
+                    <label class="form-label">Nome</label>
+                    <input type="text" class="form-control" name="first_name" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Cognome</label>
+                    <input type="text" class="form-control" name="last_name" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">CF</label>
+                    <input type="text" class="form-control" name="fiscal_code">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Telefono</label>
+                    <input type="text" class="form-control" name="phone">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-control" name="email">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Residenza</label>
+                    <input type="text" class="form-control" name="address" placeholder="via/piazza, n°, città">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Data di nascita</label>
+                    <input type="date" class="form-control" name="birth_date">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Assunzione</label>
+                    <input type="date" class="form-control" name="hire_date">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Tipo contratto</label>
+                    <input type="text" class="form-control" name="contract_type">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Scadenza contr.</label>
+                    <input type="date" class="form-control" name="contract_expiry">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Livello</label>
+                    <input type="text" class="form-control" name="level" placeholder="es. 4, 4S, Q">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">RAL (€)</label>
+                    <input type="text" class="form-control" name="ral" placeholder="es. 35.500,00">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Reparti</label>
+                    <input type="text" class="form-control" name="departments" placeholder="es. Stampa; Taglio">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Stato</label>
+                    <select class="form-select" name="active">
+                        <option value="1">Attivo</option>
+                        <option value="0">Non attivo</option>
+                    </select>
+                </div>
+
+                <div class="col-12">
+                    <button type="button" id="saveAnagBtn" class="btn btn-primary">Salva anagrafica</button>
+                    <span id="saveAnagFeedback" class="text-muted ms-2"></span>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-bold">Certificazioni</span>
+ <div class="btn-group btn-group-sm">
+     <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#editCertModal">+ Aggiungi</button>
+     <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newCertTypeModal">+ Nuovo
+        tipo</button>
+     </div>
+        </div>
+        <div class="card-body">
+            <table id="certsTable" class="table table-bordered w-100">
+                <thead>
+                    <tr>
+                        <th>Cert.</th>
+                        <th>Stato</th>
+                        <th>Rilascio</th>
+                        <th>Scadenza</th>
+                        <th>Giorni</th>
+                        <th>Note</th>
+                        <th>Azioni</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <small class="text-muted">Legenda:
+                <span class="badge bg-success">OK</span>
+                <span class="badge bg-warning text-dark">IN_SCADENZA_30/60/90</span>
+                <span class="badge bg-danger">SCADUTA</span>
+                <span class="badge bg-secondary">MANCA</span>
+                <span class="badge bg-dark">ND</span>
+            </small>
+        </div>
+    </div>
+</div>
+
+<!-- Modale Certificazioni -->
+<div class="modal fade" id="editCertModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Aggiungi/Modifica certificazione</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editCertForm">
+                    <input type="hidden" name="id" id="certRowId">
+                    <input type="hidden" name="operator_id" id="certOperatorId" value="{{ operator_id }}">
+                    <div class="mb-2">
+                        <label class="form-label">Tipo certificazione</label>
+                        <select class="form-select" name="cert_type_id" id="certTypeSelect" required>
+                            <option value="">Seleziona…</option>
+                        </select>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label">Stato</label>
+                            <select class="form-select" name="status" required>
+                                <option value="OK">OK</option>
+                                <option value="MANCA">MANCA</option>
+                                <option value="ND">ND</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Rilascio</label>
+                            <input type="date" class="form-control" name="issue_date">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Scadenza</label>
+                            <input type="date" class="form-control" name="expiry_date">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Note</label>
+                            <input type="text" class="form-control" name="notes" maxlength="255">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="saveCertBtn" class="btn btn-primary">Salva</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modale: Nuovo tipo di certificazione -->
+<div class="modal fade" id="newCertTypeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nuovo tipo di certificazione</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newCertTypeForm">
+                    <div class="mb-2">
+                        <label class="form-label">Codice</label>
+                        <input name="code" class="form-control" placeholder="es. CARRELLO" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Descrizione</label>
+                        <input name="description" class="form-control" placeholder="es. Patentino muletto">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Richiede scadenza?</label>
+                        <select name="requires_expiry" class="form-select">
+                            <option value="1" selected>Sì</option>
+                            <option value="0">No</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button id="createCertTypeBtn" type="button" class="btn btn-primary">Crea</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block script %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    (function () {
+        const opId = document.querySelector('[data-operator-id]').getAttribute('data-operator-id');
+
+        function daysTo(dateStr) { if (!dateStr) return ''; const t = new Date(); t.setHours(0, 0, 0, 0); const d = new Date(dateStr + 'T00:00:00'); return Math.round((d - t) / (1000 * 60 * 60 * 24)); }
+        function badge(st) { const m = { OK: 'success', 'IN_SCADENZA_30': 'warning', 'IN_SCADENZA_60': 'warning', 'IN_SCADENZA_90': 'warning', SCADUTA: 'danger', MANCA: 'secondary', ND: 'dark' }; return st ? `<span class="badge bg-${m[st] || 'secondary'}">${st}</span>` : ''; }
+        function getParam(name) { const u = new URL(window.location.href); return u.searchParams.get(name); }
+
+        function loadOperator() {
+            $.getJSON(`/api/hr/operators/${opId}`, function (op) {
+                $('#op_id').val(op.id);
+                $('input[name="first_name"]').val(op.first_name || '');
+                $('input[name="last_name"]').val(op.last_name || '');
+                $('input[name="fiscal_code"]').val(op.fiscal_code || '');
+                $('input[name="phone"]').val(op.phone || '');
+                $('input[name="email"]').val(op.email || '');
+                $('input[name="address"]').val(op.address || '');
+                $('input[name="birth_date"]').val(op.birth_date || '');
+                $('input[name="hire_date"]').val(op.hire_date || '');
+                $('input[name="contract_type"]').val(op.contract_type || '');
+                $('input[name="contract_expiry"]').val(op.contract_expiry || '');
+                $('input[name="level"]').val(op.level || '');
+                $('input[name="ral"]').val(op.ral ?? '');
+                $('input[name="departments"]').val(op.departments || '');
+                $('select[name="active"]').val(op.active ? '1' : '0');
+            }).fail(() => alert('Errore nel caricamento anagrafica'));
+        }
+
+        $('#saveAnagBtn').on('click', function () {
+            const form = $('#anagForm').serialize();
+            $('#saveAnagBtn').prop('disabled', true);
+            $.post('/api/hr/operators/update', form)
+                .done(() => $('#saveAnagFeedback').text('Salvato ✔️').fadeIn().delay(1200).fadeOut())
+                .fail((xhr) => alert('Errore salvataggio anagrafica: ' + (xhr?.responseJSON?.detail || xhr?.responseText || '')))
+                .always(() => $('#saveAnagBtn').prop('disabled', false));
+        });
+
+        function loadCertTypes() {
+            $.getJSON('/api/hr/meta/cert-types', function (list) {
+                const $sel = $('#certTypeSelect').empty().append('<option value="">Seleziona…</option>');
+                list.forEach(c => $sel.append(`<option value="${c.id}">${c.code}</option>`));
+            });
+        }
+
+        function loadCertTypes(selectedId) {
+            return $.getJSON('/api/hr/meta/cert-types', function (list) {
+                const $sel = $('#certTypeSelect').empty().append('<option value="">Seleziona…</option>');
+                list.forEach(c => $sel.append(`<option value="${c.id}">${c.code}</option>`));
+                if (selectedId != null && selectedId !== '') {
+                    $sel.val(String(selectedId));
+                }
+            });
+        }
+
+
+        function loadCerts() {
+            $.getJSON('/api/hr/certs/status', { operator_id: Number(opId) }, function (list) {
+                const $tb = $('#certsTable tbody').empty();
+                list.forEach(d => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+          <td>${d.cert_code || ''}</td>
+          <td>${badge(d.status_calc)}</td>
+          <td>${d.issue_date || ''}</td>
+          <td>${d.expiry_date || ''}</td>
+          <td>${d.expiry_date ? daysTo(d.expiry_date) : ''}</td>
+          <td>${d.notes ? (d.notes.length > 40 ? d.notes.substring(0, 40) + '…' : d.notes) : ''}</td>
+          <td>
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-outline-primary editCertBtn">Modifica</button>
+              <button class="btn btn-outline-danger deleteCertBtn">Elimina</button>
+            </div>
+          </td>`;
+                    $(tr).data('row', {
+                        id: d.id, operator_id: d.operator_id, cert_type_id: d.cert_type_id,
+                        status: d.raw_status, issue_date: d.issue_date, expiry_date: d.expiry_date, notes: d.notes
+                    });
+                    if (d.status_calc === 'SCADUTA') tr.classList.add('table-danger');
+                    if (d.status_calc && d.status_calc.startsWith('IN_SCADENZA')) tr.classList.add('table-warning');
+                    $('#certsTable tbody').append(tr);
+                });
+            }).fail(() => alert('Errore nel caricamento certificazioni'));
+        }
+
+        $('#certsTable').on('click', '.editCertBtn', function () {
+            const r = $(this).closest('tr').data('row');
+
+            $('#certRowId').val(r.id || '');
+            $('#certOperatorId').val(r.operator_id || opId);
+            $('#editCertForm [name="status"]').val(r.status || 'ND');
+            $('#editCertForm [name="issue_date"]').val(r.issue_date || '');
+            $('#editCertForm [name="expiry_date"]').val(r.expiry_date || '');
+            $('#editCertForm [name="notes"]').val(r.notes || '');
+
+            // 👉 carica i tipi e seleziona quello giusto, poi apri la modale
+            loadCertTypes(r.cert_type_id).then(() => {
+                $('#editCertModal').modal('show');
+            });
+        });
+
+        $('#saveCertBtn').on('click', function () {
+            const $id = $('#certRowId');
+            const disableId = !$id.val();      // se vuoto, disabilito per non serializzarlo
+            if (disableId) $id.prop('disabled', true);
+
+            const payload = $('#editCertForm').serialize();
+
+            if (disableId) $id.prop('disabled', false);
+
+            $.post('/api/hr/certs/upsert', payload)
+                .done(function () { $('#editCertModal').modal('hide'); loadCerts(); })
+                .fail(function (xhr) {
+                    alert('Errore salvataggio certificazione: ' + (xhr?.responseJSON?.detail || xhr?.responseText || ''));
+                });
+        });
+
+
+        $('#certsTable').on('click', '.deleteCertBtn', function () {
+            const r = $(this).closest('tr').data('row');
+            if (!r?.id) return;
+            if (!confirm('Eliminare questa certificazione?')) return;
+            $.post('/api/hr/certs/delete', { id: r.id })
+                .done(loadCerts)
+                .fail((xhr) => alert('Errore eliminazione certificazione: ' + (xhr?.responseJSON?.detail || xhr?.responseText || '')));
+        });
+
+        // init
+        loadOperator();
+        loadCerts();
+
+        // se arrivi con ?addCert=1 apri subito la modale
+        if (getParam('addCert') === '1') {
+            $('#editCertModal').modal('show');
+        }
+    })();
+
+
+    // Crea nuovo tipo certificazione
+        $('#createCertTypeBtn').on('click', function () {
+            const formData = $('#newCertTypeForm').serialize();
+            $('#createCertTypeBtn').prop('disabled', true);
+            $.post('/api/hr/certs/types/create', formData)
+                .done(function () {
+                    alert('Tipo certificazione creato con successo');
+                    $('#newCertTypeModal').modal('hide');
+                    loadCertTypes(); // ricarica l'elenco nel select
+                })
+                .fail(function (xhr) {
+                    alert('Errore creazione tipo certificazione: ' + (xhr?.responseJSON?.detail || xhr?.responseText || ''));
+                })
+                .always(() => $('#createCertTypeBtn').prop('disabled', false));
+        });
+
+</script>
+{% endblock %}
