@@ -297,30 +297,60 @@ class HRService:
         # HTML semplice, raggruppato per operatore
         def esc(x): return (str(x) if x is not None else "").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
         # costruzione tabella
-        header = """
-            <h3>Certificazioni in scadenza entro {days} giorni</h3>
-            <p>Data: {today}</p>
+        header = f"""
+            <h3>Certificazioni scadute e in scadenza entro {days} giorni</h3>
+            <p>Data: {today.strftime("%Y-%m-%d")}</p>
             <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
-              <thead>
+            <thead>
                 <tr>
-                  <th>Operatore</th>
-                  <th>Reparti</th>
-                  <th>Certificazione</th>
-                  <th>Scadenza</th>
-                  <th>Giorni residui</th>
+                <th>Operatore</th>
+                <th>Reparti</th>
+                <th>Certificazione</th>
+                <th>Scadenza</th>
+                <th>Giorni residui</th>
+                <th>Stato</th>
                 </tr>
-              </thead>
-              <tbody>
-        """.format(days=days, today=today.strftime("%Y-%m-%d"))
+            </thead>
+            <tbody>
+        """
+
         body_rows = []
         for r in rows:
+            name = esc(r.get('operator_name'))
+            deps = esc(r.get('departments') or '')
+            cert = esc(r.get('cert_code'))
+            exp  = esc(r.get('expiry_date'))
+            days_left = r.get('days_left')
+            try:
+                dl = int(days_left)
+            except Exception:
+                dl = None
+
+            if dl is None:
+                stato = "N/D"
+                style_row = ""
+                dl_text = ""
+            elif dl < 0:
+                stato = f"SCADUTA da {abs(dl)} gg"
+                style_row = " style='background:#ffe6e6;'"  # rosino leggero
+                dl_text = str(dl)
+            elif dl == 0:
+                stato = "OGGI"
+                style_row = " style='background:#fff5cc;'"  # giallino
+                dl_text = "0"
+            else:
+                stato = f"tra {dl} gg"
+                style_row = ""
+                dl_text = str(dl)
+
             body_rows.append(
-                "<tr>"
-                f"<td>{esc(r.get('operator_name'))}</td>"
-                f"<td>{esc(r.get('departments') or '')}</td>"
-                f"<td>{esc(r.get('cert_code'))}</td>"
-                f"<td>{esc(r.get('expiry_date'))}</td>"
-                f"<td style='text-align:right'>{esc(r.get('days_left'))}</td>"
+                f"<tr{style_row}>"
+                f"<td>{name}</td>"
+                f"<td>{deps}</td>"
+                f"<td>{cert}</td>"
+                f"<td>{exp}</td>"
+                f"<td style='text-align:right'>{dl_text}</td>"
+                f"<td>{stato}</td>"
                 "</tr>"
             )
         footer = "</tbody></table>"
