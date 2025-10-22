@@ -510,6 +510,60 @@ SET @sql := (
 );
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+
+-- citizenship
+SET @sql := (
+  SELECT IF(
+    EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME = 'operators'
+             AND COLUMN_NAME = 'citizenship'),
+    'SELECT 1',
+    'ALTER TABLE operators ADD COLUMN citizenship VARCHAR(80) NULL AFTER birth_date'
+  )
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- education_level
+SET @sql := (
+  SELECT IF(
+    EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME = 'operators'
+             AND COLUMN_NAME = 'education_level'),
+    'SELECT 1',
+    'ALTER TABLE operators ADD COLUMN education_level VARCHAR(60) NULL COMMENT ''Es: Nessuno, Licenza media, Diploma, Laurea triennale, Laurea magistrale, Master, Dottorato, Altro'' AFTER citizenship'
+  )
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- indici per filtri veloci (se non già presenti)
+SET @sql := (
+  SELECT IF(
+    EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME = 'operators'
+             AND INDEX_NAME = 'idx_operators_citizenship'),
+    'SELECT 1',
+    'ALTER TABLE operators ADD INDEX idx_operators_citizenship (citizenship)'
+  )
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql := (
+  SELECT IF(
+    EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME = 'operators'
+             AND INDEX_NAME = 'idx_operators_education'),
+    'SELECT 1',
+    'ALTER TABLE operators ADD INDEX idx_operators_education (education_level)'
+  )
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+
+
 /* ============================
    CERTIFICAZIONII POPOLAMENTO 
    ============================ */
@@ -747,3 +801,17 @@ ON DUPLICATE KEY UPDATE status=VALUES(status), issue_date=VALUES(issue_date), ex
 /* ============================================
    FINE POPOLAMENTO DELLE CERTIFICAZIONI
    ============================================ */
+
+
+/* ============================================
+  gestione notifiche tramite mail
+   ============================================ */
+   CREATE TABLE IF NOT EXISTS notification_log (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  event_code   VARCHAR(100) NOT NULL,      -- es: 'EXPIRY_REMINDER_LOGIN'
+  ref_date     DATE NOT NULL,              -- data di riferimento (oggi)
+  sent_to      VARCHAR(200) NOT NULL,      -- destinatario
+  payload_hash CHAR(64) NOT NULL,          -- sha256 contenuto
+  created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_event_once (event_code, ref_date, sent_to, payload_hash)
+);

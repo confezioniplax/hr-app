@@ -4,6 +4,7 @@ from decimal import Decimal
 from datetime import date, datetime
 
 from fastapi.encoders import jsonable_encoder
+from app.services.email_sender import EmailSender
 
 from app.repo.HRRepository import HRRepository
 
@@ -40,6 +41,11 @@ class HRService:
         email: Optional[str] = None,
         address: Optional[str] = None,
         birth_date: Optional[str] = None,
+
+        # 👇 NUOVI CAMPI
+        citizenship: Optional[str] = None,
+        education_level: Optional[str] = None,
+
         hire_date: Optional[str] = None,
         contract_type: Optional[str] = None,
         contract_expiry: Optional[str] = None,
@@ -65,6 +71,11 @@ class HRService:
                 email=(email or "").strip() or None,
                 address=(address or "").strip() or None,
                 birth_date=bd,
+
+                # 👇 PASSA I NUOVI CAMPI
+                citizenship=(citizenship or "").strip() or None,
+                education_level=(education_level or "").strip() or None,
+
                 hire_date=hd,
                 contract_type=(contract_type or "").strip() or None,
                 contract_expiry=ce,
@@ -84,6 +95,11 @@ class HRService:
         fiscal_code: Optional[str] = None,
         phone: Optional[str] = None,
         birth_date: Optional[str] = None,
+
+        # 👇 NUOVI CAMPI
+        citizenship: Optional[str] = None,
+        education_level: Optional[str] = None,
+
         hire_date: Optional[str] = None,
         contract_type: Optional[str] = None,
         contract_expiry: Optional[str] = None,
@@ -109,6 +125,11 @@ class HRService:
             fiscal_code=(fiscal_code or "").strip() or None,
             phone=(phone or "").strip() or None,
             birth_date=bd,
+
+            # 👇 PASSA I NUOVI CAMPI
+            citizenship=(citizenship or "").strip() or None,
+            education_level=(education_level or "").strip() or None,
+
             hire_date=hd,
             contract_type=(contract_type or "").strip() or None,
             contract_expiry=ce,
@@ -245,3 +266,74 @@ class HRService:
     def _validate_non_negative(val: Optional[float], *, field: str) -> None:
         if val is not None and val < 0:
             raise ValueError(f"{field} non può essere negativo")
+
+
+    def send_expiring_certs_email_if_needed(
+        self,
+        *,
+        recipient_email: str,
+        days: int = 30,
+        department_id: int | None = None
+    ) -> dict:
+        """
+        Recupera scadenze entro 'days' e, se presenti e non già inviate oggi
+        con lo stesso contenuto, invia email HTML al destinatario.
+        Ritorna un mini-report {sent: bool, n_rows: int}.
+        """
+        rows = self.repo.list_expiring_certs(days=days, department_id=department_id)
+
+        # niente da inviare
+        if not rows:
+            return {"sent": False, "n_rows": 0, "reason": "no-data"}
+
+        # anti-spam giornaliero sul contenuto
+        today = date.today()
+        event_code = "EXPIRY_REMINDER_LOGIN"
+        if self.repo.notification_already_sent(
+            event_code=event_code, ref_date=today, sent_to=recipient_email, payload=rows
+        ):
+            return {"sent": False, "n_rows": len(rows), "reason": "already-sent-today"}
+
+        # HTML semplice, raggruppato per operatore
+        def esc(x): return (str(x) if x is not None else "").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+        # costruzione tabella
+        header = """
+            <h3>Certificazioni in scadenza entro {days} giorni</h3>
+            <p>Data: {today}</p>
+            <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
+              <thead>
+                <tr>
+                  <th>Operatore</th>
+                  <th>Reparti</th>
+                  <th>Certificazione</th>
+                  <th>Scadenza</th>
+                  <th>Giorni residui</th>
+                </tr>
+              </thead>
+              <tbody>
+        """.format(days=days, today=today.strftime("%Y-%m-%d"))
+        body_rows = []
+        for r in rows:
+            body_rows.append(
+                "<tr>"
+                f"<td>{esc(r.get('operator_name'))}</td>"
+                f"<td>{esc(r.get('departments') or '')}</td>"
+                f"<td>{esc(r.get('cert_code'))}</td>"
+                f"<td>{esc(r.get('expiry_date'))}</td>"
+                f"<td style='text-align:right'>{esc(r.get('days_left'))}</td>"
+                "</tr>"
+            )
+        footer = "</tbody></table>"
+        html = header + "\n".join(body_rows) + footer
+
+        EmailSender().send_html(
+            to=[recipient_email],
+            subject=f"[PLAX] Scadenze certificazioni entro {days} giorni",
+            html=html
+        )
+
+        # log di invio (idempotenza giornaliera)
+        self.repo.notification_log_insert(
+            event_code=event_code, ref_date=today, sent_to=recipient_email, payload=rows
+        )
+        return {"sent": True, "n_rows": len(rows), "reason": "ok"}

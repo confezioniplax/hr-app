@@ -113,6 +113,28 @@
                         <label class="form-label">Nascita</label>
                         <input name="birth_date" type="date" class="form-control">
                     </div>
+                    <!-- NUOVI CAMPI -->
+                    <div class="col-md-4">
+                        <label class="form-label">Cittadinanza</label>
+                        <input name="citizenship" class="form-control" placeholder="es. Italiana, Rumena">
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <label class="form-label">Titolo di studio</label>
+                        <input list="educationOptions" name="education_level" class="form-control" placeholder="es. Diploma, Laurea…">
+                        <datalist id="educationOptions">
+                            <option value="Nessuno">
+                            <option value="Licenza media">
+                            <option value="Diploma">
+                            <option value="Laurea triennale">
+                            <option value="Laurea magistrale">
+                            <option value="Master">
+                            <option value="Dottorato">
+                            <option value="Altro">
+                        </datalist>
+                    </div>
+                    <!-- /NUOVI CAMPI -->
+
                     <div class="col-md-4">
                         <label class="form-label">Assunzione</label>
                         <input name="hire_date" type="date" class="form-control">

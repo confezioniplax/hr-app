@@ -1,4 +1,6 @@
 from __future__ import annotations
+import hashlib
+import json
 from typing import Any, Dict, List, Optional
 from datetime import date
 
@@ -95,6 +97,8 @@ class HRRepository:
         email: Optional[str],
         address: Optional[str],
         birth_date: Optional[date],
+        citizenship: Optional[str],
+        education_level: Optional[str],
         hire_date: Optional[date],
         contract_type: Optional[str],
         contract_expiry: Optional[date],
@@ -117,6 +121,8 @@ class HRRepository:
                 (email or None),
                 (address or None),
                 self._fmt(birth_date),
+                (citizenship or None),
+                (education_level or None),
                 self._fmt(hire_date),
                 (contract_type or None),
                 self._fmt(contract_expiry),
@@ -150,6 +156,8 @@ class HRRepository:
         fiscal_code: Optional[str],
         phone: Optional[str],
         birth_date: Optional[date],
+        citizenship: Optional[str],
+        education_level: Optional[str],
         hire_date: Optional[date],
         contract_type: Optional[str],
         contract_expiry: Optional[date],
@@ -169,6 +177,8 @@ class HRRepository:
                 (fiscal_code or None),
                 (phone or None),
                 self._fmt(birth_date),
+                (citizenship or None),
+                (education_level or None),
                 self._fmt(hire_date),
                 (contract_type or None),
                 self._fmt(contract_expiry),
@@ -198,6 +208,7 @@ class HRRepository:
                         WHERE d.name IN ({placeholders})
                     """
                     db.execute_query(sql_ins, [int(id), *names], query_type=QueryType.INSERT)
+
 
     # =====================================================
     # CERTIFICAZIONI — LISTA STATO + UPSERT + DELETE
@@ -276,3 +287,51 @@ class HRRepository:
         with self.db_manager as db:
             row = db.execute_query(sql, params, fetchall=False, query_type=QueryType.GET)
             return int(row["n"]) if row else 0
+
+
+
+    # =====================================================
+    # EMAIL SENDER
+    # =====================================================
+
+    def list_expiring_certs(self, *, days: int = 30, department_id: int | None = None):
+        sql = QuerySqlHRMYSQL.list_expiring_certs_sql(filter_by_department=(department_id is not None))
+        params = [int(department_id), int(days)] if department_id is not None else [int(days)]
+        with self.db_manager as db:
+            return db.execute_query(sql, params, query_type=QueryType.GET)
+        
+
+
+    def notification_already_sent(self, *, event_code: str, ref_date: date, sent_to: str, payload: list[dict]) -> bool:
+        """
+        Verifica se una notifica identica (stesso payload) è già stata inviata oggi
+        a 'sent_to' per l'evento indicato.
+        """
+        payload_hash = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+        sql = """
+            SELECT 1
+            FROM notification_log
+            WHERE event_code = %s
+              AND ref_date = %s
+              AND sent_to = %s
+              AND payload_hash = %s
+            LIMIT 1
+        """
+        params = [event_code, ref_date.strftime("%Y-%m-%d"), sent_to, payload_hash]
+        with self.db_manager as db:
+            row = db.execute_query(sql, params, fetchall=False, query_type=QueryType.GET)
+        return bool(row)
+
+    def notification_log_insert(self, *, event_code: str, ref_date: date, sent_to: str, payload: list[dict]) -> None:
+        """
+        Inserisce un record di notifica inviata per evitare reinvii identici nella stessa giornata.
+        """
+        payload_hash = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+        sql = """
+            INSERT INTO notification_log (event_code, ref_date, sent_to, payload_hash)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE id = id
+        """
+        params = [event_code, ref_date.strftime("%Y-%m-%d"), sent_to, payload_hash]
+        with self.db_manager as db:
+            db.execute_query(sql, params, query_type=QueryType.INSERT)

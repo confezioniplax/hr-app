@@ -60,6 +60,8 @@ async def hr_create_operator(
     email: Optional[str] = Form(default=None),
     address: Optional[str] = Form(default=None),
     birth_date: Optional[str] = Form(default=None),
+    citizenship: Optional[str] = Form(default=None),
+    education_level: Optional[str] = Form(default=None),
     hire_date: Optional[str] = Form(default=None),
     contract_type: Optional[str] = Form(default=None),
     contract_expiry: Optional[str] = Form(default=None),
@@ -79,6 +81,11 @@ async def hr_create_operator(
             email=email,
             address=address,
             birth_date=birth_date,
+
+            # 👇 PASSA I NUOVI CAMPI
+            citizenship=citizenship,
+            education_level=education_level,
+
             hire_date=hire_date,
             contract_type=contract_type,
             contract_expiry=contract_expiry,
@@ -91,6 +98,7 @@ async def hr_create_operator(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating operator: {str(e)}")
 
+
 @hr_api_router.post("/hr/operators/update")
 async def hr_update_operator(
     id: int = Form(...),
@@ -99,6 +107,11 @@ async def hr_update_operator(
     fiscal_code: Optional[str] = Form(default=None),
     phone: Optional[str] = Form(default=None),
     birth_date: Optional[str] = Form(default=None),
+
+    # 👇 NUOVI CAMPI
+    citizenship: Optional[str] = Form(default=None),
+    education_level: Optional[str] = Form(default=None),
+
     hire_date: Optional[str] = Form(default=None),
     contract_type: Optional[str] = Form(default=None),
     contract_expiry: Optional[str] = Form(default=None),
@@ -119,6 +132,11 @@ async def hr_update_operator(
             fiscal_code=fiscal_code,
             phone=phone,
             birth_date=birth_date,
+
+            # 👇 PASSA I NUOVI CAMPI
+            citizenship=citizenship,
+            education_level=education_level,
+
             hire_date=hire_date,
             contract_type=contract_type,
             contract_expiry=contract_expiry,

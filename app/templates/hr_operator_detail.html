@@ -42,6 +42,26 @@
                     <input type="date" class="form-control" name="birth_date">
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label">Cittadinanza</label>
+                    <input type="text" class="form-control" name="citizenship" placeholder="es. Italiana, Rumena">
+                </div>
+                
+                <div class="col-md-3">
+                    <label class="form-label">Titolo di studio</label>
+                    <input list="educationOptions" class="form-control" name="education_level" placeholder="es. Diploma, Laurea…">
+                    <datalist id="educationOptions">
+                        <option value="Nessuno">
+                        <option value="Licenza media">
+                        <option value="Diploma">
+                        <option value="Laurea triennale">
+                        <option value="Laurea magistrale">
+                        <option value="Master">
+                        <option value="Dottorato">
+                        <option value="Altro">
+                    </datalist>
+                </div>
+
+                <div class="col-md-2">
                     <label class="form-label">Assunzione</label>
                     <input type="date" class="form-control" name="hire_date">
                 </div>
@@ -223,6 +243,10 @@
                 $('input[name="email"]').val(op.email || '');
                 $('input[name="address"]').val(op.address || '');
                 $('input[name="birth_date"]').val(op.birth_date || '');
+
+                $('input[name="citizenship"]').val(op.citizenship || '');
+                $('input[name="education_level"]').val(op.education_level || '');
+
                 $('input[name="hire_date"]').val(op.hire_date || '');
                 $('input[name="contract_type"]').val(op.contract_type || '');
                 $('input[name="contract_expiry"]').val(op.contract_expiry || '');
@@ -232,6 +256,7 @@
                 $('select[name="active"]').val(op.active ? '1' : '0');
             }).fail(() => alert('Errore nel caricamento anagrafica'));
         }
+
 
         $('#saveAnagBtn').on('click', function () {
             const form = $('#anagForm').serialize();

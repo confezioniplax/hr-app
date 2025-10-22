@@ -20,59 +20,92 @@
  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE.
- 
 """
 
-from datetime import timedelta, datetime
+from datetime import timedelta
+import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request, Response
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse
 from app.model.PersonModel import PersonModel
 from app.entities.Person import Person
 from app.dependencies import create_access_token
 from fastapi.security import OAuth2PasswordRequestForm
 
+# Servizio che invia l'email di scadenze
+try:
+    from app.services.HRService import HRService
+except Exception:
+    # fallback se il path è differente (es. HRService.py alla radice del progetto)
+    from HRService import HRService  # type: ignore
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter(
-  prefix="/token",
-  tags=["login"]
+    prefix="/token",
+    tags=["login"]
 )
 
 @router.post("/")
-def get_auth_token(response: Response, request: Request, background_task: BackgroundTasks, form_data: OAuth2PasswordRequestForm = Depends(), language: str | None = Header(default='it')):
+def get_auth_token(
+    response: Response,
+    request: Request,
+    background_task: BackgroundTasks,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    language: str | None = Header(default='it')
+):
     user_model = PersonModel()
-    user: Person = user_model.get_user_info_auth(form_data.username)
-    
+    user: Person | None = user_model.get_user_info_auth(form_data.username)
+
     if not user:
         return JSONResponse(
             status_code=401,
             content="user_not_found",
             headers={"WWW-Authenticate": "Bearer"},
-        )        
-    elif not user_model.check_password(stored_password=user.user_password, password=form_data.password):
+        )
+
+    if not user_model.check_password(stored_password=user.user_password, password=form_data.password):
         return JSONResponse(
             status_code=401,
             content="username_password_error",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
+    # JWT
     access_token_expires = timedelta(minutes=480)
     access_token = create_access_token(user.__dict__, expires_delta=access_token_expires)
 
+    # Cookie
     response.set_cookie(key="access_token", value=access_token, expires=int(access_token_expires.total_seconds()))
 
+    # Programma l’invio dell’email scadenze in background (non blocca il login)
+    def _send_expiry_email_task(recipient: str):
+        try:
+            HRService().send_expiring_certs_email_if_needed(
+                recipient_email=recipient,
+                days=30,            # modifica qui la soglia se vuoi
+                department_id=None  # oppure filtra per reparto del manager
+            )
+        except Exception as e:
+            logger.warning(f"Expiry email not sent: {e}")
 
-    response = JSONResponse(
+    # recipient_email = (getattr(user, "email", None) or "leonelliriccardo0@gmail.com").strip()
+    recipient_email = "leonelliriccardo0@gmail.com"
+    background_task.add_task(_send_expiry_email_task, recipient_email)
+
+    # Risposta API
+    res = JSONResponse(
         status_code=200,
         content={
             "message": "Login successful",
             "userdata": {"username": form_data.username, "role": user.role}
         }
     )
-    response.set_cookie(key="access_token", value=access_token, expires=int(access_token_expires.total_seconds()))
-    return response
+    res.set_cookie(key="access_token", value=access_token, expires=int(access_token_expires.total_seconds()))
+    return res
 
 
 @router.get("/logout")
 def logout(response: Response):
-    response = RedirectResponse(url="/login", status_code=303)
-    response.delete_cookie("access_token")
-    return response
+    resp = RedirectResponse(url="/login", status_code=303)
+    resp.delete_cookie("access_token")
+    return resp
