@@ -335,3 +335,24 @@ class HRRepository:
         params = [event_code, ref_date.strftime("%Y-%m-%d"), sent_to, payload_hash]
         with self.db_manager as db:
             db.execute_query(sql, params, query_type=QueryType.INSERT)
+
+
+    def notification_sent_in_window(self, *, event_code: str, sent_to: str, days_window: int = 7) -> bool:
+        """
+        True se esiste già un invio per lo stesso event_code/sent_to negli ultimi 'days_window' giorni.
+        NB: il confronto è sulla data (CURRENT_DATE), non sul payload.
+        """
+        # Esempio: days_window=7 -> blocca se esiste invio con ref_date >= oggi-6 (una volta a settimana)
+        sql = """
+            SELECT 1
+            FROM notification_log
+            WHERE event_code = %s
+              AND sent_to = %s
+              AND ref_date >= (CURRENT_DATE() - INTERVAL %s DAY) + INTERVAL 1 DAY - INTERVAL 1 DAY
+            LIMIT 1
+        """
+        # Nota: la formula sopra è equivalente a CURRENT_DATE() - INTERVAL %s DAY; l'ho lasciata esplicita
+        # per chiarezza su eventuali off-by-one nella tua versione di MySQL/MariaDB.
+        with self.db_manager as db:
+            row = db.execute_query(sql, [event_code, sent_to, int(days_window - 1)], fetchall=False, query_type=QueryType.GET)
+        return bool(row)

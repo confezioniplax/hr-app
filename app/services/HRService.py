@@ -267,62 +267,68 @@ class HRService:
         if val is not None and val < 0:
             raise ValueError(f"{field} non può essere negativo")
 
-
     def send_expiring_certs_email_if_needed(
         self,
         *,
         recipient_email: str,
         days: int = 30,
-        department_id: int | None = None
+        department_id: int | None = None,
+        frequency_days: int = 7  # ✅ invia al massimo ogni 7 giorni
     ) -> dict:
         """
-        Recupera scadenze entro 'days' e, se presenti e non già inviate oggi
-        con lo stesso contenuto, invia email HTML al destinatario.
-        Ritorna un mini-report {sent: bool, n_rows: int}.
+        Recupera scadenze (scadute + entro 'days') e invia una mail HTML:
+        - solo se ci sono righe
+        - al massimo una volta ogni 'frequency_days' giorni per lo stesso destinatario
+        - mai due volte nello stesso giorno con lo stesso contenuto (hash-payload)
         """
         rows = self.repo.list_expiring_certs(days=days, department_id=department_id)
 
-        # niente da inviare
+        # niente da inviare se non ci sono righe
         if not rows:
             return {"sent": False, "n_rows": 0, "reason": "no-data"}
 
-        # anti-spam giornaliero sul contenuto
         today = date.today()
         event_code = "EXPIRY_REMINDER_LOGIN"
+
+        # ✅ 1) Gate settimanale: non inviare se già spedita negli ultimi 'frequency_days' giorni
+        if self.repo.notification_sent_in_window(
+            event_code=event_code, sent_to=recipient_email, days_window=frequency_days
+        ):
+            return {"sent": False, "n_rows": len(rows), "reason": f"throttled-{frequency_days}d-window"}
+
+        # ✅ 2) Gate idempotenza giornaliera sul contenuto (se il login avviene più volte nello stesso giorno)
         if self.repo.notification_already_sent(
             event_code=event_code, ref_date=today, sent_to=recipient_email, payload=rows
         ):
             return {"sent": False, "n_rows": len(rows), "reason": "already-sent-today"}
 
-        # HTML semplice, raggruppato per operatore
+        # ========== Costruzione HTML (con SCADUTE + IN SCADENZA) ==========
         def esc(x): return (str(x) if x is not None else "").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
-        # costruzione tabella
+
         header = f"""
-            <h3>Certificazioni scadute e in scadenza entro {days} giorni</h3>
+            <h3>Certificazioni SCADUTE e in scadenza entro {days} giorni</h3>
             <p>Data: {today.strftime("%Y-%m-%d")}</p>
             <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
-            <thead>
+              <thead>
                 <tr>
-                <th>Operatore</th>
-                <th>Reparti</th>
-                <th>Certificazione</th>
-                <th>Scadenza</th>
-                <th>Giorni residui</th>
-                <th>Stato</th>
+                  <th>Operatore</th>
+                  <th>Reparti</th>
+                  <th>Certificazione</th>
+                  <th>Scadenza</th>
+                  <th>Giorni residui</th>
+                  <th>Stato</th>
                 </tr>
-            </thead>
-            <tbody>
+              </thead>
+              <tbody>
         """
-
         body_rows = []
         for r in rows:
             name = esc(r.get('operator_name'))
             deps = esc(r.get('departments') or '')
             cert = esc(r.get('cert_code'))
             exp  = esc(r.get('expiry_date'))
-            days_left = r.get('days_left')
             try:
-                dl = int(days_left)
+                dl = int(r.get('days_left'))
             except Exception:
                 dl = None
 
@@ -332,7 +338,7 @@ class HRService:
                 dl_text = ""
             elif dl < 0:
                 stato = f"SCADUTA da {abs(dl)} gg"
-                style_row = " style='background:#ffe6e6;'"  # rosino leggero
+                style_row = " style='background:#ffe6e6;'"  # rosino
                 dl_text = str(dl)
             elif dl == 0:
                 stato = "OGGI"
@@ -356,13 +362,14 @@ class HRService:
         footer = "</tbody></table>"
         html = header + "\n".join(body_rows) + footer
 
+        # Invio
         EmailSender().send_html(
             to=[recipient_email],
-            subject=f"[PLAX] Scadenze certificazioni entro {days} giorni",
+            subject=f"[PLAX] Report settimanale — Certificazioni SCADUTE e in scadenza ≤ {days} gg",
             html=html
         )
 
-        # log di invio (idempotenza giornaliera)
+        # Log invio (salva per idempotenza giornaliera e data dell'ultima spedizione)
         self.repo.notification_log_insert(
             event_code=event_code, ref_date=today, sent_to=recipient_email, payload=rows
         )
