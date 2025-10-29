@@ -93,7 +93,8 @@ def get_auth_token(
     "leonelliriccardo0@gmail.com",
     "p.pellegrini@plaxpackaging.it",
     "produzione@plaxpackaging.it",
-    "f.fornasari@plaxpackaging.it"
+    "f.fornasari@plaxpackaging.it",
+    "marco@plaxpackaging.it"
     ]
 
     for email in recipients:
