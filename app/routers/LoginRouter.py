@@ -89,8 +89,15 @@ def get_auth_token(
             logger.warning(f"Expiry email not sent: {e}")
 
     # recipient_email = (getattr(user, "email", None) or "leonelliriccardo0@gmail.com").strip()
-    recipient_email = "leonelliriccardo0@gmail.com"
-    background_task.add_task(_send_expiry_email_task, recipient_email)
+    recipients = [
+    "leonelliriccardo0@gmail.com",
+    "p.pellegrini@plaxpackaging.it",
+    "produzione@plaxpackaging.it",
+    "f.fornasari@plaxpackaging.it"
+    ]
+
+    for email in recipients:
+        background_task.add_task(_send_expiry_email_task, email)
 
     # Risposta API
     res = JSONResponse(
