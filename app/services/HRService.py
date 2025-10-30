@@ -198,8 +198,16 @@ class HRService:
         self.repo.delete_certification(cert_id)
 
     def get_certification(self, cert_id: int) -> Optional[Dict[str, Any]]:
-        """Serve per il download dell'allegato."""
+        """Serve per il download dell'allegato (per id specifico)."""
         row = self.repo.get_certification(cert_id)
+        return self._encode(row) if row else None
+
+    def get_latest_certification_for(self, *, operator_id: int, cert_type_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Restituisce l'ULTIMA certificazione per (operator_id, cert_type_id) con il relativo file_path.
+        Criterio di “ultima”: id più alto (robusto anche senza created_at).
+        """
+        row = self.repo.get_latest_certification_for(operator_id=operator_id, cert_type_id=cert_type_id)
         return self._encode(row) if row else None
 
     # -------- KPI --------
@@ -356,6 +364,7 @@ class HRService:
     ) -> str:
         """
         Salva fisicamente l'allegato e ritorna il percorso stringa.
+        Se esiste già lo stesso nome, aggiunge suffisso __1, __2, ...
         """
         dest = self._build_attachment_dest(
             operator_id=operator_id,
@@ -364,7 +373,6 @@ class HRService:
             expiry_date=expiry_date,
             original_filename=original_filename,
         )
-        # se esiste già, aggiungo un suffisso numerico
         candidate = dest
         i = 1
         while candidate.exists():
@@ -401,7 +409,7 @@ class HRService:
         ):
             return {"sent": False, "n_rows": len(rows), "reason": "already-sent-today"}
 
-        def esc(x): 
+        def esc(x):
             return (str(x) if x is not None else "").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
 
         header = f"""

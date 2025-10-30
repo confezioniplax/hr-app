@@ -358,3 +358,16 @@ class HRRepository:
         with self.db_manager as db:
             row = db.execute_query(sql, [event_code, sent_to, int(days_window - 1)], fetchall=False, query_type=QueryType.GET)
         return bool(row)
+
+
+def get_latest_certification_for(self, *, operator_id: int, cert_type_id: int):
+    sql = """
+        SELECT id, operator_id, cert_type_id, file_path
+        FROM operator_certifications
+        WHERE operator_id = %s AND cert_type_id = %s
+        ORDER BY id DESC
+        LIMIT 1
+    """
+    with self.db_manager as db:
+        row = db.execute_query(sql, [operator_id, cert_type_id], fetchall=False, query_type=QueryType.GET)
+        return row if row else None

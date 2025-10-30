@@ -209,9 +209,8 @@ async def hr_upsert_cert(
     current_user: TokenData = Depends(get_current_manager),
 ):
     """
-    Non salviamo più su disco nel router: il salvataggio fisico e il naming
-    (<TIPO>_<DATA>.<ext> sotto \\Certificazioni\\<CF>) li fa già il Service.
-    Qui leggiamo una sola volta il contenuto e lo passiamo al service.
+    Il salvataggio fisico e il naming (<TIPO>_<DATA>.<ext> sotto \\Certificazioni\\<CF>)
+    li fa il Service. Qui leggiamo una sola volta il file e lo passiamo al service.
     """
     try:
         content = await attachment.read() if attachment and attachment.filename else None
@@ -242,6 +241,26 @@ async def hr_download_cert(
     if not path:
         raise HTTPException(status_code=404, detail="File non presente")
     p = Path(path)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="File non trovato su disco")
+    return FileResponse(p, filename=p.name)
+
+
+@hr_api_router.get("/hr/certs/download-latest")
+async def hr_download_cert_latest(
+    operator_id: int = Query(...),
+    cert_type_id: int = Query(...),
+    service: HRService = Depends(HRService),
+    current_user: TokenData = Depends(get_current_manager),
+):
+    """
+    Scarica SEMPRE l'ultima certificazione inserita per (operator_id, cert_type_id).
+    La "più recente" è quella con id maggiore (strategia robusta se non hai un created_at).
+    """
+    row = service.get_latest_certification_for(operator_id=operator_id, cert_type_id=cert_type_id)
+    if not row or not row.get("file_path"):
+        raise HTTPException(status_code=404, detail="Nessun allegato trovato per l'ultima certificazione")
+    p = Path(row["file_path"])
     if not p.exists():
         raise HTTPException(status_code=404, detail="File non trovato su disco")
     return FileResponse(p, filename=p.name)
