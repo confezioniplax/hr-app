@@ -4,7 +4,7 @@
 -->
 
 <!DOCTYPE html>
-<html lang="it" data-bs-theme="light">
+<html lang="it">
 
 <head>
     <meta charset="utf-8">
@@ -22,99 +22,50 @@
     <script src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.js"></script>
 
     <style>
-        :root {
-            --plax-grad-start: #0d6efd;
-            --plax-grad-end: #6f42c1;
-        }
-
         body {
             background-color: #f8f9fa;
         }
 
-        /* NAVBAR */
-        .navbar.nav-gradient {
-            background: linear-gradient(90deg, var(--plax-grad-start), var(--plax-grad-end));
+        .navbar {
+            border-bottom: 1px solid #e0e0e0;
         }
 
-        .navbar-brand span {
-            letter-spacing: .4px
-        }
-
-        .navbar .btn-outline-light.btn-sm {
-            border-color: rgba(255, 255, 255, .6);
-        }
-
-        .navbar .btn-outline-light.btn-sm:hover {
-            background: rgba(255, 255, 255, .15);
-        }
-
-        /* OFFCANVAS */
         .offcanvas {
-            width: 260px
+            width: 250px;
         }
 
-        .offcanvas .nav-link {
-            color: #495057;
-            border-left: 3px solid transparent;
-            transition: background-color .15s ease, border-color .15s ease;
-        }
-
-        .offcanvas .nav-link:hover {
-            background: #f1f3f5;
-        }
-
-        .offcanvas .nav-link.active {
-            background: #eef4ff;
-            color: #0d6efd !important;
+        .nav-link.active {
             font-weight: 600;
-            border-left-color: #0d6efd;
-        }
-
-        /* MAIN */
-        main {
-            min-height: calc(100vh - 140px);
-        }
-
-        /* opzionale: leggera ombra al passaggio del mouse sulla voce menu */
-        .offcanvas .nav-link i {
-            width: 1.25rem;
-            text-align: center
+            color: #0d6efd !important;
         }
     </style>
 </head>
 
 <body>
-    <!-- HEADER -->
-    <header class="mb-3 sticky-top">
-        <nav class="navbar navbar-expand-lg navbar-dark nav-gradient shadow-sm">
+    <header class="mb-3">
+        <nav class="navbar bg-light navbar-light shadow-sm">
             <div class="container-fluid">
 
-                <!-- Toggler -->
+                <!-- pulsante menu -->
                 <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu"
-                    aria-controls="sidebarMenu" aria-label="Apri menu">
+                    aria-controls="sidebarMenu">
                     <span class="navbar-toggler-icon"></span>
                 </button>
 
-                <!-- Brand -->
-                <a class="navbar-brand d-flex align-items-center ms-2" href="/">
-                    <img src="/static/backgrounds/logo.png" alt="PLAX" height="38" class="me-2 rounded">
-                    <span class="fw-bold"></span>
+                <!-- brand con logo -->
+                <a class="navbar-brand fw-bold ms-2 d-flex align-items-center" href="/">
+                    <img src="/static/backgrounds/logo.png" alt="PLAX" height="28" class="me-2">
                 </a>
 
-                <!-- Right zone -->
-                <div class="ms-auto d-flex align-items-center gap-2">
-                    <span class="text-white-50 small d-none d-sm-inline">
-                        <i class="bi bi-person-circle me-1"></i> {{ user.nome if user else "HR User" }}
-                    </span>
-                    <a class="btn btn-outline-light btn-sm" href="/token/logout">
+                <div class="ms-auto">
+                    <a class="btn btn-outline-secondary btn-sm" href="/token/logout">
                         <i class="bi bi-box-arrow-right"></i> Logout
                     </a>
                 </div>
-
             </div>
         </nav>
 
-        <!-- SIDEBAR OFFCANVAS -->
+        <!-- menu laterale offcanvas -->
         <div class="offcanvas offcanvas-start" tabindex="-1" id="sidebarMenu" aria-labelledby="sidebarMenuLabel">
             <div class="offcanvas-header">
                 <h5 class="offcanvas-title fw-bold" id="sidebarMenuLabel">
@@ -129,42 +80,26 @@
                             <i class="bi bi-people-fill me-2"></i> Anagrafiche Operatori
                         </a>
                     </li>
-                    <!-- aggiungi qui altre voci -->
                 </ul>
             </div>
         </div>
     </header>
 
-    <!-- MAIN -->
     <main class="container-fluid px-4">
         {% block content %}{% endblock %}
         {% block script %}{% endblock %}
     </main>
 
-    <!-- FOOTER -->
     <footer class="text-center mt-4 mb-3 small text-muted">
         &copy; {{ now().year if now else '2025' }} PLAX Packaging — Gestione HR
     </footer>
 
     <script>
-        // Evidenziazione robusta del link attivo (supporta path più lunghi)
-        (function () {
-            const path = window.location.pathname.replace(/\/+$/, '') || '/';
-            document.querySelectorAll('.offcanvas .nav-link').forEach(link => {
-                const href = (link.getAttribute('href') || '').replace(/\/+$/, '') || '/';
-                if (path === href || (path.startsWith(href) && href !== '/')) {
-                    link.classList.add('active');
-                }
-            });
-        })();
-
-        // Chiudi l’offcanvas quando clicchi su una voce
-        document.querySelectorAll('#sidebarMenu .nav-link').forEach(link => {
-            link.addEventListener('click', () => {
-                const el = document.getElementById('sidebarMenu');
-                const oc = bootstrap.Offcanvas.getInstance(el) || new bootstrap.Offcanvas(el);
-                oc.hide();
-            });
+        // evidenzia il link attivo
+        document.querySelectorAll('.nav-link').forEach(link => {
+            if (window.location.pathname === link.getAttribute('href')) {
+                link.classList.add('active');
+            }
         });
     </script>
 </body>
