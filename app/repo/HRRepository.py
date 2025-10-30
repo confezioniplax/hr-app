@@ -209,9 +209,8 @@ class HRRepository:
                     """
                     db.execute_query(sql_ins, [int(id), *names], query_type=QueryType.INSERT)
 
-
     # =====================================================
-    # CERTIFICAZIONI — LISTA STATO + UPSERT + DELETE
+    # CERTIFICAZIONI — LISTA STATO + GET + UPSERT + DELETE
     # =====================================================
     def list_cert_status(
         self,
@@ -245,6 +244,15 @@ class HRRepository:
             rows = [r for r in rows if (r.get("status_calc") == status_calc)]
         return rows
 
+    def get_certification(self, cert_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Recupera una certificazione per id (serve per download allegato).
+        """
+        sql = "SELECT id, operator_id, cert_type_id, file_path FROM operator_certifications WHERE id = %s"
+        with self.db_manager as db:
+            row = db.execute_query(sql, [int(cert_id)], fetchall=False, query_type=QueryType.GET)
+            return row if row else None
+
     def upsert_certification(
         self,
         *,
@@ -255,6 +263,7 @@ class HRRepository:
         issue_date: Optional[date],
         expiry_date: Optional[date],
         notes: Optional[str],
+        file_path: Optional[str] = None,  # 👈 NOVITÀ
     ) -> int:
         # ON DUPLICATE KEY su (operator_id, cert_type_id)
         sql = QuerySqlHRMYSQL.upsert_certification_sql()
@@ -265,6 +274,7 @@ class HRRepository:
             self._fmt(issue_date),
             self._fmt(expiry_date),
             notes,
+            file_path,  # 👈 NOVITÀ
         )
         with self.db_manager as db:
             db.execute_query(sql, params, query_type=QueryType.INSERT)
@@ -288,19 +298,14 @@ class HRRepository:
             row = db.execute_query(sql, params, fetchall=False, query_type=QueryType.GET)
             return int(row["n"]) if row else 0
 
-
-
     # =====================================================
     # EMAIL SENDER
     # =====================================================
-
     def list_expiring_certs(self, *, days: int = 30, department_id: int | None = None):
         sql = QuerySqlHRMYSQL.list_expiring_certs_sql(filter_by_department=(department_id is not None))
         params = [int(department_id), int(days)] if department_id is not None else [int(days)]
         with self.db_manager as db:
             return db.execute_query(sql, params, query_type=QueryType.GET)
-        
-
 
     def notification_already_sent(self, *, event_code: str, ref_date: date, sent_to: str, payload: list[dict]) -> bool:
         """
@@ -336,7 +341,6 @@ class HRRepository:
         with self.db_manager as db:
             db.execute_query(sql, params, query_type=QueryType.INSERT)
 
-
     def notification_sent_in_window(self, *, event_code: str, sent_to: str, days_window: int = 7) -> bool:
         """
         True se esiste già un invio per lo stesso event_code/sent_to negli ultimi 'days_window' giorni.
@@ -351,8 +355,6 @@ class HRRepository:
               AND ref_date >= (CURRENT_DATE() - INTERVAL %s DAY) + INTERVAL 1 DAY - INTERVAL 1 DAY
             LIMIT 1
         """
-        # Nota: la formula sopra è equivalente a CURRENT_DATE() - INTERVAL %s DAY; l'ho lasciata esplicita
-        # per chiarezza su eventuali off-by-one nella tua versione di MySQL/MariaDB.
         with self.db_manager as db:
             row = db.execute_query(sql, [event_code, sent_to, int(days_window - 1)], fetchall=False, query_type=QueryType.GET)
         return bool(row)

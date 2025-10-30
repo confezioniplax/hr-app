@@ -1,7 +1,7 @@
 {% extends layout or "layout_manager.html" %}
 {% block content %}
 <div class="container-fluid mt-4" data-operator-id="{{ operator_id }}">
-        <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="mb-0">Scheda Operatore #{{ operator_id }}</h2>
         <a href="/hr/certificazioni" class="btn btn-outline-secondary">← Torna</a>
     </div>
@@ -45,10 +45,11 @@
                     <label class="form-label">Cittadinanza</label>
                     <input type="text" class="form-control" name="citizenship" placeholder="es. Italiana, Rumena">
                 </div>
-                
+
                 <div class="col-md-3">
                     <label class="form-label">Titolo di studio</label>
-                    <input list="educationOptions" class="form-control" name="education_level" placeholder="es. Diploma, Laurea…">
+                    <input list="educationOptions" class="form-control" name="education_level"
+                        placeholder="es. Diploma, Laurea…">
                     <datalist id="educationOptions">
                         <option value="Nessuno">
                         <option value="Licenza media">
@@ -106,11 +107,12 @@
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <span class="fw-bold">Certificazioni</span>
- <div class="btn-group btn-group-sm">
-     <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#editCertModal">+ Aggiungi</button>
-     <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newCertTypeModal">+ Nuovo
-        tipo</button>
-     </div>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#editCertModal">+
+                    Aggiungi</button>
+                <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newCertTypeModal">+
+                    Nuovo tipo</button>
+            </div>
         </div>
         <div class="card-body">
             <table id="certsTable" class="table table-bordered w-100">
@@ -147,7 +149,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <form id="editCertForm">
+                <form id="editCertForm" enctype="multipart/form-data">
                     <input type="hidden" name="id" id="certRowId">
                     <input type="hidden" name="operator_id" id="certOperatorId" value="{{ operator_id }}">
                     <div class="mb-2">
@@ -177,10 +179,18 @@
                             <label class="form-label">Note</label>
                             <input type="text" class="form-control" name="notes" maxlength="255">
                         </div>
+                        <div class="col-12">
+                            <label class="form-label">Allegato (PDF/immagine/Word)</label>
+                            <input type="file" class="form-control" name="attachment" id="certAttachment"
+                                accept=".pdf,image/*,.doc,.docx,.odt">
+                            <small class="text-muted">Verrà salvato in
+                                \\Certificazioni\\&lt;CF&gt;\\&lt;TIPO&gt;_&lt;DATA&gt;.&lt;ext&gt;</small>
+                        </div>
                     </div>
                 </form>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer d-flex justify-content-between">
+                <small class="text-muted" id="currentFileInfo"></small>
                 <button type="button" id="saveCertBtn" class="btn btn-primary">Salva</button>
             </div>
         </div>
@@ -229,10 +239,22 @@
     (function () {
         const opId = document.querySelector('[data-operator-id]').getAttribute('data-operator-id');
 
-        function daysTo(dateStr) { if (!dateStr) return ''; const t = new Date(); t.setHours(0, 0, 0, 0); const d = new Date(dateStr + 'T00:00:00'); return Math.round((d - t) / (1000 * 60 * 60 * 24)); }
-        function badge(st) { const m = { OK: 'success', 'IN_SCADENZA_30': 'warning', 'IN_SCADENZA_60': 'warning', 'IN_SCADENZA_90': 'warning', SCADUTA: 'danger', MANCA: 'secondary', ND: 'dark' }; return st ? `<span class="badge bg-${m[st] || 'secondary'}">${st}</span>` : ''; }
+        function daysTo(dateStr) {
+            if (!dateStr) return '';
+            const t = new Date(); t.setHours(0, 0, 0, 0);
+            const d = new Date(dateStr + 'T00:00:00');
+            return Math.round((d - t) / (1000 * 60 * 60 * 24));
+        }
+        function badge(st) {
+            const m = {
+                OK: 'success', IN_SCADENZA_30: 'warning', IN_SCADENZA_60: 'warning', IN_SCADENZA_90: 'warning',
+                SCADUTA: 'danger', MANCA: 'secondary', ND: 'dark'
+            };
+            return st ? `<span class="badge bg-${m[st] || 'secondary'}">${st}</span>` : '';
+        }
         function getParam(name) { const u = new URL(window.location.href); return u.searchParams.get(name); }
 
+        // --- load anagrafica ---
         function loadOperator() {
             $.getJSON(`/api/hr/operators/${opId}`, function (op) {
                 $('#op_id').val(op.id);
@@ -243,10 +265,8 @@
                 $('input[name="email"]').val(op.email || '');
                 $('input[name="address"]').val(op.address || '');
                 $('input[name="birth_date"]').val(op.birth_date || '');
-
                 $('input[name="citizenship"]').val(op.citizenship || '');
                 $('input[name="education_level"]').val(op.education_level || '');
-
                 $('input[name="hire_date"]').val(op.hire_date || '');
                 $('input[name="contract_type"]').val(op.contract_type || '');
                 $('input[name="contract_expiry"]').val(op.contract_expiry || '');
@@ -257,7 +277,6 @@
             }).fail(() => alert('Errore nel caricamento anagrafica'));
         }
 
-
         $('#saveAnagBtn').on('click', function () {
             const form = $('#anagForm').serialize();
             $('#saveAnagBtn').prop('disabled', true);
@@ -267,13 +286,7 @@
                 .always(() => $('#saveAnagBtn').prop('disabled', false));
         });
 
-        function loadCertTypes() {
-            $.getJSON('/api/hr/meta/cert-types', function (list) {
-                const $sel = $('#certTypeSelect').empty().append('<option value="">Seleziona…</option>');
-                list.forEach(c => $sel.append(`<option value="${c.id}">${c.code}</option>`));
-            });
-        }
-
+        // --- tipi di certificazione ---
         function loadCertTypes(selectedId) {
             return $.getJSON('/api/hr/meta/cert-types', function (list) {
                 const $sel = $('#certTypeSelect').empty().append('<option value="">Seleziona…</option>');
@@ -284,69 +297,103 @@
             });
         }
 
-
+        // --- lista certificazioni ---
         function loadCerts() {
             $.getJSON('/api/hr/certs/status', { operator_id: Number(opId) }, function (list) {
                 const $tb = $('#certsTable tbody').empty();
                 list.forEach(d => {
+                    const hasFile = !!d.file_path;
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-          <td>${d.cert_code || ''}</td>
-          <td>${badge(d.status_calc)}</td>
-          <td>${d.issue_date || ''}</td>
-          <td>${d.expiry_date || ''}</td>
-          <td>${d.expiry_date ? daysTo(d.expiry_date) : ''}</td>
-          <td>${d.notes ? (d.notes.length > 40 ? d.notes.substring(0, 40) + '…' : d.notes) : ''}</td>
-          <td>
-            <div class="btn-group btn-group-sm">
-              <button class="btn btn-outline-primary editCertBtn">Modifica</button>
-              <button class="btn btn-outline-danger deleteCertBtn">Elimina</button>
-            </div>
-          </td>`;
+                    <td>${d.cert_code || ''}</td>
+                    <td>${badge(d.status_calc)}</td>
+                    <td>${d.issue_date || ''}</td>
+                    <td>${d.expiry_date || ''}</td>
+                    <td>${d.expiry_date ? daysTo(d.expiry_date) : ''}</td>
+                    <td>${d.notes ? (d.notes.length > 40 ? d.notes.substring(0, 40) + '…' : d.notes) : ''}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary editCertBtn">Modifica</button>
+                            <button class="btn btn-outline-danger deleteCertBtn">Elimina</button>
+                            ${hasFile ? `<a class="btn btn-outline-secondary" href="/api/hr/certs/download/${d.id}" target="_blank">Scarica</a>` : ''}
+                        </div>
+                    </td>`;
                     $(tr).data('row', {
                         id: d.id, operator_id: d.operator_id, cert_type_id: d.cert_type_id,
-                        status: d.raw_status, issue_date: d.issue_date, expiry_date: d.expiry_date, notes: d.notes
+                        status: d.raw_status, issue_date: d.issue_date, expiry_date: d.expiry_date, notes: d.notes,
+                        file_path: d.file_path || null
                     });
                     if (d.status_calc === 'SCADUTA') tr.classList.add('table-danger');
                     if (d.status_calc && d.status_calc.startsWith('IN_SCADENZA')) tr.classList.add('table-warning');
-                    $('#certsTable tbody').append(tr);
+                    $tb.append(tr);
                 });
             }).fail(() => alert('Errore nel caricamento certificazioni'));
         }
 
+        // --- apri modale in modifica ---
         $('#certsTable').on('click', '.editCertBtn', function () {
             const r = $(this).closest('tr').data('row');
 
+            // compila form
             $('#certRowId').val(r.id || '');
             $('#certOperatorId').val(r.operator_id || opId);
             $('#editCertForm [name="status"]').val(r.status || 'ND');
             $('#editCertForm [name="issue_date"]').val(r.issue_date || '');
             $('#editCertForm [name="expiry_date"]').val(r.expiry_date || '');
             $('#editCertForm [name="notes"]').val(r.notes || '');
+            $('#certAttachment').val(''); // reset file
+            $('#currentFileInfo').text(r.file_path ? 'Allegato presente' : '');
 
-            // 👉 carica i tipi e seleziona quello giusto, poi apri la modale
+            // carica tipi e seleziona quello giusto, poi apri
             loadCertTypes(r.cert_type_id).then(() => {
-                $('#editCertModal').modal('show');
+                const modal = new bootstrap.Modal(document.getElementById('editCertModal'));
+                modal.show();
             });
         });
 
+        // --- apri modale in aggiunta (pulita) ---
+        document.getElementById('editCertModal').addEventListener('show.bs.modal', function (ev) {
+            // se l'apertura non viene dal tasto "Aggiungi", non pulire (già fatto sopra)
+            if (ev.relatedTarget && ev.relatedTarget.matches('.btn-success')) {
+                // reset form
+                $('#editCertForm')[0].reset();
+                $('#certRowId').val('');
+                $('#certOperatorId').val(opId);
+                $('#currentFileInfo').text('');
+                loadCertTypes(null);
+            }
+        });
+
+        // --- salva certificazione (multipart) ---
         $('#saveCertBtn').on('click', function () {
-            const $id = $('#certRowId');
-            const disableId = !$id.val();      // se vuoto, disabilito per non serializzarlo
-            if (disableId) $id.prop('disabled', true);
+            const formEl = document.getElementById('editCertForm');
+            const fd = new FormData(formEl);
 
-            const payload = $('#editCertForm').serialize();
+            // se id vuoto, non inviare il campo
+            if (!$('#certRowId').val()) fd.delete('id');
 
-            if (disableId) $id.prop('disabled', false);
-
-            $.post('/api/hr/certs/upsert', payload)
-                .done(function () { $('#editCertModal').modal('hide'); loadCerts(); })
+            // chiamata AJAX multipart
+            $('#saveCertBtn').prop('disabled', true);
+            $.ajax({
+                url: '/api/hr/certs/upsert',
+                type: 'POST',
+                data: fd,
+                processData: false,
+                contentType: false
+            })
+                .done(function () {
+                    bootstrap.Modal.getInstance(document.getElementById('editCertModal')).hide();
+                    loadCerts();
+                })
                 .fail(function (xhr) {
                     alert('Errore salvataggio certificazione: ' + (xhr?.responseJSON?.detail || xhr?.responseText || ''));
+                })
+                .always(function () {
+                    $('#saveCertBtn').prop('disabled', false);
                 });
         });
 
-
+        // --- elimina certificazione ---
         $('#certsTable').on('click', '.deleteCertBtn', function () {
             const r = $(this).closest('tr').data('row');
             if (!r?.id) return;
@@ -356,25 +403,26 @@
                 .fail((xhr) => alert('Errore eliminazione certificazione: ' + (xhr?.responseJSON?.detail || xhr?.responseText || '')));
         });
 
-        // init
+        // --- init ---
         loadOperator();
         loadCerts();
 
         // se arrivi con ?addCert=1 apri subito la modale
         if (getParam('addCert') === '1') {
-            $('#editCertModal').modal('show');
+            loadCertTypes(null).then(() => {
+                const modal = new bootstrap.Modal(document.getElementById('editCertModal'));
+                modal.show();
+            });
         }
-    })();
 
-
-    // Crea nuovo tipo certificazione
+        // Crea nuovo tipo certificazione
         $('#createCertTypeBtn').on('click', function () {
             const formData = $('#newCertTypeForm').serialize();
             $('#createCertTypeBtn').prop('disabled', true);
             $.post('/api/hr/certs/types/create', formData)
                 .done(function () {
                     alert('Tipo certificazione creato con successo');
-                    $('#newCertTypeModal').modal('hide');
+                    bootstrap.Modal.getInstance(document.getElementById('newCertTypeModal')).hide();
                     loadCertTypes(); // ricarica l'elenco nel select
                 })
                 .fail(function (xhr) {
@@ -383,5 +431,6 @@
                 .always(() => $('#createCertTypeBtn').prop('disabled', false));
         });
 
+    })();
 </script>
 {% endblock %}

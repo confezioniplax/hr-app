@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     API_MYSQL_PORT: str = Field(..., validation_alias="API_MYSQL_PORT")
     API_MYSQL_USERNAME: str = Field(..., validation_alias="API_MYSQL_USERNAME")
     API_MYSQL_PASSWORD: str = Field(..., validation_alias="API_MYSQL_PASSWORD")
+    API_MYSQL_DB: str = Field(..., validation_alias="API_MYSQL_DB")
 
     # === JWT ===
     SECRET_KEY_JWT: str = Field(..., validation_alias="SECRET_KEY_JWT")
@@ -22,6 +23,9 @@ class Settings(BaseSettings):
     SMTP_FROM: str = Field(..., validation_alias="SMTP_FROM")
     SMTP_SENDER_NAME: str = Field("PLAX Notifiche", validation_alias="SMTP_SENDER_NAME")
     SMTP_TLS: bool = Field(True, validation_alias="SMTP_TLS")
+
+    # === File Path ===
+    CERTS_BASE_DIR: str = Field(..., validation_alias="CERTS_BASE_DIR")
 
     model_config = SettingsConfigDict(env_file=".env")
 

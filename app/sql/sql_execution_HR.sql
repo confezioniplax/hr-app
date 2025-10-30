@@ -635,3 +635,7 @@ VALUES ('UTENTE','PRODUZIONE','produzione@plaxpackaging.it',
 ON DUPLICATE KEY UPDATE
   user_password = VALUES(user_password),
   active = 1;
+
+
+ALTER TABLE operator_certifications
+  ADD COLUMN file_path VARCHAR(255) NULL AFTER notes;

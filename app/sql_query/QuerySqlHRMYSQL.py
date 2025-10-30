@@ -170,6 +170,7 @@ class QuerySqlHRMYSQL:
     oc.issue_date,
     oc.expiry_date,
     oc.notes,
+    oc.file_path,          -- 👈 aggiunto per la UI (download)
     oc.id,
     CASE
         WHEN oc.id IS NULL THEN 'MANCA'
@@ -213,15 +214,29 @@ ORDER BY
     @staticmethod
     def upsert_certification_sql() -> str:
         return """
-            INSERT INTO operator_certifications
-                (operator_id, cert_type_id, status, issue_date, expiry_date, notes)
-            VALUES (%s,%s,%s,%s,%s,%s)
-            ON DUPLICATE KEY UPDATE
-                status = VALUES(status),
-                issue_date = VALUES(issue_date),
-                expiry_date = VALUES(expiry_date),
-                notes = VALUES(notes),
-                id = LAST_INSERT_ID(id)
+INSERT INTO operator_certifications
+  (operator_id, cert_type_id, status, issue_date, expiry_date, notes, file_path)
+VALUES (%s,%s,%s,%s,%s,%s,%s)
+ON DUPLICATE KEY UPDATE
+  status = VALUES(status),
+  issue_date = VALUES(issue_date),
+  expiry_date = VALUES(expiry_date),
+  notes = VALUES(notes),
+  file_path = COALESCE(VALUES(file_path), file_path),
+  id = LAST_INSERT_ID(id)
+
+        """
+
+    @staticmethod
+    def get_certification_sql() -> str:
+        """
+        Restituisce la certificazione per id (per download allegato).
+        """
+        return """
+            SELECT id, operator_id, cert_type_id, file_path
+            FROM operator_certifications
+            WHERE id = %s
+            LIMIT 1
         """
 
     @staticmethod
@@ -244,7 +259,6 @@ ORDER BY
             """
         else:
             return "SELECT COUNT(*) AS n FROM operators WHERE active = 1"
-
 
 
     @staticmethod

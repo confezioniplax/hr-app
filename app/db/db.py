@@ -73,7 +73,7 @@ class MySQLDb:
             self.password = get_settings().API_MYSQL_PASSWORD
 
     def get_connection(self):
-        self.conn = mysql.connector.connect(user=self.username, password=self.password, host=self.hostname , port=self.port, database='archivio')
+        self.conn = mysql.connector.connect(user=self.username, password=self.password, host=self.hostname , port=self.port, database=get_settings().API_MYSQL_DB)
 
     def open(self):
         self.get_connection()

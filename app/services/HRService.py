@@ -1,12 +1,14 @@
 from __future__ import annotations
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from decimal import Decimal
 from datetime import date, datetime
+from pathlib import Path
+import re
 
 from fastapi.encoders import jsonable_encoder
 from app.services.email_sender import EmailSender
-
 from app.repo.HRRepository import HRRepository
+from app.settings import get_settings
 
 
 class HRService:
@@ -41,11 +43,8 @@ class HRService:
         email: Optional[str] = None,
         address: Optional[str] = None,
         birth_date: Optional[str] = None,
-
-        # 👇 NUOVI CAMPI
         citizenship: Optional[str] = None,
         education_level: Optional[str] = None,
-
         hire_date: Optional[str] = None,
         contract_type: Optional[str] = None,
         contract_expiry: Optional[str] = None,
@@ -71,11 +70,8 @@ class HRService:
                 email=(email or "").strip() or None,
                 address=(address or "").strip() or None,
                 birth_date=bd,
-
-                # 👇 PASSA I NUOVI CAMPI
                 citizenship=(citizenship or "").strip() or None,
                 education_level=(education_level or "").strip() or None,
-
                 hire_date=hd,
                 contract_type=(contract_type or "").strip() or None,
                 contract_expiry=ce,
@@ -95,11 +91,8 @@ class HRService:
         fiscal_code: Optional[str] = None,
         phone: Optional[str] = None,
         birth_date: Optional[str] = None,
-
-        # 👇 NUOVI CAMPI
         citizenship: Optional[str] = None,
         education_level: Optional[str] = None,
-
         hire_date: Optional[str] = None,
         contract_type: Optional[str] = None,
         contract_expiry: Optional[str] = None,
@@ -125,11 +118,8 @@ class HRService:
             fiscal_code=(fiscal_code or "").strip() or None,
             phone=(phone or "").strip() or None,
             birth_date=bd,
-
-            # 👇 PASSA I NUOVI CAMPI
             citizenship=(citizenship or "").strip() or None,
             education_level=(education_level or "").strip() or None,
-
             hire_date=hd,
             contract_type=(contract_type or "").strip() or None,
             contract_expiry=ce,
@@ -167,9 +157,30 @@ class HRService:
         issue_date: Optional[str],
         expiry_date: Optional[str],
         notes: Optional[str],
+        # 👇 nuovo: contenuto e nome originale del file (se presente)
+        file_bytes: Optional[bytes] = None,
+        original_filename: Optional[str] = None,
     ) -> int:
+        """
+        Salva/aggiorna la certificazione.
+        Se `file_bytes` e `original_filename` sono presenti, salva l'allegato su disco in:
+            <BASE>/Certificazioni/<CF>/<TIPO>_<DATA>.<ext>
+        e passa `file_path` al repository.
+        """
         issue = self._parse_date(issue_date)
         expiry = self._parse_date(expiry_date)
+
+        file_path: Optional[str] = None
+        if file_bytes and original_filename:
+            file_path = self._save_cert_attachment(
+                operator_id=operator_id,
+                cert_type_id=cert_type_id,
+                issue_date=issue,
+                expiry_date=expiry,
+                original_filename=original_filename,
+                content=file_bytes,
+            )
+
         return int(
             self.repo.upsert_certification(
                 id=id,
@@ -179,11 +190,17 @@ class HRService:
                 issue_date=issue,
                 expiry_date=expiry,
                 notes=(notes or "").strip() or None,
+                file_path=file_path,
             )
         )
 
     def delete_certification(self, cert_id: int) -> None:
         self.repo.delete_certification(cert_id)
+
+    def get_certification(self, cert_id: int) -> Optional[Dict[str, Any]]:
+        """Serve per il download dell'allegato."""
+        row = self.repo.get_certification(cert_id)
+        return self._encode(row) if row else None
 
     # -------- KPI --------
     def get_kpi(self, department_id=None, cert_type_id=None, status_calc=None) -> Dict[str, Any]:
@@ -209,7 +226,9 @@ class HRService:
             "n_scadute": int(scad or 0),
         }
 
-    # -------- helpers --------
+    # =======================
+    #  Helpers & File Saving
+    # =======================
     def _encode(self, obj: Any) -> Any:
         data = jsonable_encoder(obj)
         if isinstance(data, list):
@@ -229,6 +248,7 @@ class HRService:
             return None
         s = s.strip()
         try:
+            # formati "YYYY-MM-DD"
             y, m, d = s.split("-")
             return date(int(y), int(m), int(d))
         except Exception:
@@ -249,12 +269,9 @@ class HRService:
         txt = str(s).strip()
         if txt == "":
             return None
-        # normalizza formati: prima rimuove i separatori delle migliaia, poi converte la virgola in punto
         if "," in txt and "." in txt:
-            # caso tipico italia con punti come migliaia e virgola come decimali
             txt = txt.replace(".", "").replace(",", ".")
         elif "," in txt and "." not in txt:
-            # solo virgola come decimali
             txt = txt.replace(",", ".")
         try:
             val = float(txt)
@@ -267,6 +284,97 @@ class HRService:
         if val is not None and val < 0:
             raise ValueError(f"{field} non può essere negativo")
 
+    # ---------- File path logic ----------
+    def _safe_chunk(self, s: str) -> str:
+        """Sanifica una parte di percorso/nome file."""
+        return re.sub(r"[^A-Za-z0-9_.-]+", "_", (s or "").strip())
+
+    def _pick_date_for_filename(self, issue: Optional[date], expiry: Optional[date]) -> date:
+        """Usa scadenza se presente, altrimenti rilascio, altrimenti oggi."""
+        if isinstance(expiry, date):
+            return expiry
+        if isinstance(issue, date):
+            return issue
+        return date.today()
+
+    def _get_operator_fiscal_code(self, operator_id: int) -> str:
+        op = self.repo.get_operator(operator_id) or {}
+        cf = (op.get("fiscal_code") or "").strip()
+        return cf.upper() if cf else f"OP_{operator_id}"
+
+    def _get_cert_type_code(self, cert_type_id: int) -> str:
+        # non do per scontato un getter dedicato; filtro dalla lista
+        types = self.repo.list_cert_types() or []
+        for t in types:
+            if int(t.get("id", 0)) == int(cert_type_id):
+                code = (t.get("code") or "").strip()
+                return code.upper() if code else f"CERT_{cert_type_id}"
+        return f"CERT_{cert_type_id}"
+
+    def _build_attachment_dest(
+        self,
+        *,
+        operator_id: int,
+        cert_type_id: int,
+        issue_date: Optional[date],
+        expiry_date: Optional[date],
+        original_filename: str,
+    ) -> Path:
+        """
+        Costruisce il path finale:
+            <BASE>/Certificazioni/<CF>/<TIPO>_<YYYYMMDD>.<ext>
+        """
+        base_root = Path(get_settings().CERTS_BASE_DIR)  # configurabile: es. "C:/Certificazioni" o "/data"
+        root = base_root / "Certificazioni"
+
+        cf = self._safe_chunk(self._get_operator_fiscal_code(operator_id))
+        cert_code = self._safe_chunk(self._get_cert_type_code(cert_type_id))
+
+        chosen_dt = self._pick_date_for_filename(issue_date, expiry_date)
+        dstr = f"{chosen_dt:%Y%m%d}"
+
+        # estensione originale (se presente)
+        ext = ""
+        name = (original_filename or "").strip()
+        if "." in name:
+            ext = "." + name.split(".")[-1].lower()
+
+        filename = f"{cert_code}_{dstr}{ext}"
+        dest_dir = root / cf
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        return dest_dir / filename
+
+    def _save_cert_attachment(
+        self,
+        *,
+        operator_id: int,
+        cert_type_id: int,
+        issue_date: Optional[date],
+        expiry_date: Optional[date],
+        original_filename: str,
+        content: bytes,
+    ) -> str:
+        """
+        Salva fisicamente l'allegato e ritorna il percorso stringa.
+        """
+        dest = self._build_attachment_dest(
+            operator_id=operator_id,
+            cert_type_id=cert_type_id,
+            issue_date=issue_date,
+            expiry_date=expiry_date,
+            original_filename=original_filename,
+        )
+        # se esiste già, aggiungo un suffisso numerico
+        candidate = dest
+        i = 1
+        while candidate.exists():
+            candidate = dest.with_stem(f"{dest.stem}__{i}")
+            i += 1
+
+        candidate.write_bytes(content)
+        return str(candidate)
+
+    # -------- NOTIFICHE EMAIL SCADENZE --------
     def send_expiring_certs_email_if_needed(
         self,
         *,
@@ -275,35 +383,26 @@ class HRService:
         department_id: int | None = None,
         frequency_days: int = 7  # ✅ invia al massimo ogni 7 giorni
     ) -> dict:
-        """
-        Recupera scadenze (scadute + entro 'days') e invia una mail HTML:
-        - solo se ci sono righe
-        - al massimo una volta ogni 'frequency_days' giorni per lo stesso destinatario
-        - mai due volte nello stesso giorno con lo stesso contenuto (hash-payload)
-        """
         rows = self.repo.list_expiring_certs(days=days, department_id=department_id)
 
-        # niente da inviare se non ci sono righe
         if not rows:
             return {"sent": False, "n_rows": 0, "reason": "no-data"}
 
         today = date.today()
         event_code = "EXPIRY_REMINDER_LOGIN"
 
-        # ✅ 1) Gate settimanale: non inviare se già spedita negli ultimi 'frequency_days' giorni
         if self.repo.notification_sent_in_window(
             event_code=event_code, sent_to=recipient_email, days_window=frequency_days
         ):
             return {"sent": False, "n_rows": len(rows), "reason": f"throttled-{frequency_days}d-window"}
 
-        # ✅ 2) Gate idempotenza giornaliera sul contenuto (se il login avviene più volte nello stesso giorno)
         if self.repo.notification_already_sent(
             event_code=event_code, ref_date=today, sent_to=recipient_email, payload=rows
         ):
             return {"sent": False, "n_rows": len(rows), "reason": "already-sent-today"}
 
-        # ========== Costruzione HTML (con SCADUTE + IN SCADENZA) ==========
-        def esc(x): return (str(x) if x is not None else "").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+        def esc(x): 
+            return (str(x) if x is not None else "").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
 
         header = f"""
             <h3>Certificazioni SCADUTE e in scadenza entro {days} giorni</h3>
@@ -338,11 +437,11 @@ class HRService:
                 dl_text = ""
             elif dl < 0:
                 stato = f"SCADUTA da {abs(dl)} gg"
-                style_row = " style='background:#ffe6e6;'"  # rosino
+                style_row = " style='background:#ffe6e6;'"
                 dl_text = str(dl)
             elif dl == 0:
                 stato = "OGGI"
-                style_row = " style='background:#fff5cc;'"  # giallino
+                style_row = " style='background:#fff5cc;'"
                 dl_text = "0"
             else:
                 stato = f"tra {dl} gg"
@@ -362,14 +461,12 @@ class HRService:
         footer = "</tbody></table>"
         html = header + "\n".join(body_rows) + footer
 
-        # Invio
         EmailSender().send_html(
             to=[recipient_email],
             subject=f"[PLAX] Report settimanale — Certificazioni SCADUTE e in scadenza ≤ {days} gg",
             html=html
         )
 
-        # Log invio (salva per idempotenza giornaliera e data dell'ultima spedizione)
         self.repo.notification_log_insert(
             event_code=event_code, ref_date=today, sent_to=recipient_email, payload=rows
         )

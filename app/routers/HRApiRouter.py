@@ -1,11 +1,13 @@
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, Depends, Form
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, Query, Depends, Form, File, UploadFile
+from fastapi.responses import JSONResponse, FileResponse
+from pathlib import Path
 
 from app.dependencies import TokenData, get_current_manager
 from app.services.HRService import HRService
 
 hr_api_router = APIRouter(prefix="/api", tags=["hr-api"])
+
 
 # -------- ANAGRAFICA --------
 @hr_api_router.get("/hr/operators/list")
@@ -22,6 +24,7 @@ async def hr_list_operators(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing operators: {str(e)}")
 
+
 @hr_api_router.get("/hr/operators")
 async def hr_list_operators_light(
     active: Optional[int] = Query(default=1),
@@ -33,6 +36,7 @@ async def hr_list_operators_light(
         return JSONResponse(status_code=200, content=data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing operators: {str(e)}")
+
 
 @hr_api_router.get("/hr/operators/{op_id}")
 async def hr_get_operator(
@@ -49,6 +53,7 @@ async def hr_get_operator(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading operator: {str(e)}")
+
 
 # -------- CREATE / UPDATE OPERATORE --------
 @hr_api_router.post("/hr/operators/create")
@@ -67,7 +72,7 @@ async def hr_create_operator(
     contract_expiry: Optional[str] = Form(default=None),
     level: Optional[str] = Form(default=None),
     ral: Optional[str] = Form(default=None),
-    departments: Optional[str] = Form(default=None),  # "REP1; REP2" (provvisorio)
+    departments: Optional[str] = Form(default=None),
     active: Optional[int] = Form(default=1),
     service: HRService = Depends(HRService),
     current_user: TokenData = Depends(get_current_manager),
@@ -81,11 +86,8 @@ async def hr_create_operator(
             email=email,
             address=address,
             birth_date=birth_date,
-
-            # 👇 PASSA I NUOVI CAMPI
             citizenship=citizenship,
             education_level=education_level,
-
             hire_date=hire_date,
             contract_type=contract_type,
             contract_expiry=contract_expiry,
@@ -107,11 +109,8 @@ async def hr_update_operator(
     fiscal_code: Optional[str] = Form(default=None),
     phone: Optional[str] = Form(default=None),
     birth_date: Optional[str] = Form(default=None),
-
-    # 👇 NUOVI CAMPI
     citizenship: Optional[str] = Form(default=None),
     education_level: Optional[str] = Form(default=None),
-
     hire_date: Optional[str] = Form(default=None),
     contract_type: Optional[str] = Form(default=None),
     contract_expiry: Optional[str] = Form(default=None),
@@ -132,11 +131,8 @@ async def hr_update_operator(
             fiscal_code=fiscal_code,
             phone=phone,
             birth_date=birth_date,
-
-            # 👇 PASSA I NUOVI CAMPI
             citizenship=citizenship,
             education_level=education_level,
-
             hire_date=hire_date,
             contract_type=contract_type,
             contract_expiry=contract_expiry,
@@ -151,6 +147,7 @@ async def hr_update_operator(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating operator: {str(e)}")
 
+
 # -------- META --------
 @hr_api_router.get("/hr/meta/cert-types")
 async def hr_list_cert_types(
@@ -163,6 +160,7 @@ async def hr_list_cert_types(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing cert types: {str(e)}")
 
+
 @hr_api_router.get("/hr/meta/departments")
 async def hr_list_departments(
     service: HRService = Depends(HRService),
@@ -173,6 +171,7 @@ async def hr_list_departments(
         return JSONResponse(status_code=200, content=deps)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing departments: {str(e)}")
+
 
 # -------- CERTIFICAZIONI --------
 @hr_api_router.get("/hr/certs/status")
@@ -195,6 +194,7 @@ async def hr_list_cert_status(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing cert status: {str(e)}")
 
+
 @hr_api_router.post("/hr/certs/upsert")
 async def hr_upsert_cert(
     id: Optional[int] = Form(default=None),
@@ -204,10 +204,17 @@ async def hr_upsert_cert(
     issue_date: Optional[str] = Form(default=None),
     expiry_date: Optional[str] = Form(default=None),
     notes: Optional[str] = Form(default=None),
+    attachment: UploadFile | None = File(None),
     service: HRService = Depends(HRService),
     current_user: TokenData = Depends(get_current_manager),
 ):
+    """
+    Non salviamo più su disco nel router: il salvataggio fisico e il naming
+    (<TIPO>_<DATA>.<ext> sotto \\Certificazioni\\<CF>) li fa già il Service.
+    Qui leggiamo una sola volta il contenuto e lo passiamo al service.
+    """
     try:
+        content = await attachment.read() if attachment and attachment.filename else None
         cert_id = service.upsert_certification(
             id=id,
             operator_id=operator_id,
@@ -216,10 +223,29 @@ async def hr_upsert_cert(
             issue_date=issue_date,
             expiry_date=expiry_date,
             notes=notes,
+            file_bytes=content,
+            original_filename=attachment.filename if content else None,
         )
         return JSONResponse(status_code=200, content={"message": "Certification saved", "id": cert_id})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error saving certification: {str(e)}")
+
+
+@hr_api_router.get("/hr/certs/download/{cert_id}")
+async def hr_download_cert(
+    cert_id: int,
+    service: HRService = Depends(HRService),
+    current_user: TokenData = Depends(get_current_manager),
+):
+    row = service.get_certification(cert_id)
+    path = (row or {}).get("file_path")
+    if not path:
+        raise HTTPException(status_code=404, detail="File non presente")
+    p = Path(path)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="File non trovato su disco")
+    return FileResponse(p, filename=p.name)
+
 
 @hr_api_router.post("/hr/certs/delete")
 async def hr_delete_cert(
@@ -232,6 +258,7 @@ async def hr_delete_cert(
         return JSONResponse(status_code=200, content={"message": "Certification deleted"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting certification: {str(e)}")
+
 
 # -------- KPI --------
 @hr_api_router.get("/hr/kpi")
@@ -257,7 +284,6 @@ async def hr_create_cert_type(
     service: HRService = Depends(HRService),
     current_user: TokenData = Depends(get_current_manager),
 ):
-    # solo HR e CEO possono creare tipi certificazione
     if current_user.role not in ("HR", "CEO"):
         raise HTTPException(status_code=403, detail="Non autorizzato a creare tipi di certificazione")
     try:
