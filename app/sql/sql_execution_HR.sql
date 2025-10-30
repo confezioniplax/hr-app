@@ -628,10 +628,9 @@ ON DUPLICATE KEY UPDATE status=VALUES(status), issue_date=VALUES(issue_date), ex
   UNIQUE KEY uq_event_once (event_code, ref_date, sent_to, payload_hash)
 );
 
-use archivio;
 INSERT INTO operators (first_name, last_name, email, user_password, role, active)
 VALUES ('UTENTE','PRODUZIONE','produzione@plaxpackaging.it',
-        '$2b$12$L5bbr4Ob6Y6vtxmvuyjSyeMnHjB/ZG5aP1e/GA1LOV0sFe8KEl/Za',
+        '$2b$12$L5bbr4Ob6Y6vtxmvuyjSyeMnHjB/ZG5aP1e/GA1LOV0sFe8KEl/Za', --plaxG
         'HR', 1)
 ON DUPLICATE KEY UPDATE
   user_password = VALUES(user_password),

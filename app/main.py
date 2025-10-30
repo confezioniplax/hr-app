@@ -14,9 +14,7 @@ from fastapi import Security, Depends, FastAPI, status, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.db.db import DbManager, MySQLDb, QueryType 
-from .routers.ApiRouter import api_router
 from .routers.LoginRouter import router
-from .routers.ViewRouter import view_router
 from .routers.HRApiRouter import hr_api_router
 from .routers.HRViewRouter import hr_view_router
 
@@ -89,8 +87,7 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
     return PlainTextResponse(str(exc.detail), status_code=exc.status_code)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
-app.include_router(api_router)
-app.include_router(view_router)
+
 app.include_router(router)
 app.include_router(hr_api_router)
 app.include_router(hr_view_router)
