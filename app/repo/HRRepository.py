@@ -253,6 +253,21 @@ class HRRepository:
             row = db.execute_query(sql, [int(cert_id)], fetchall=False, query_type=QueryType.GET)
             return row if row else None
 
+    def get_latest_certification_for(self, *, operator_id: int, cert_type_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Ultima certificazione per (operator_id, cert_type_id), ordinata per id desc.
+        """
+        sql = """
+            SELECT id, operator_id, cert_type_id, file_path
+            FROM operator_certifications
+            WHERE operator_id = %s AND cert_type_id = %s
+            ORDER BY id DESC
+            LIMIT 1
+        """
+        with self.db_manager as db:
+            row = db.execute_query(sql, [operator_id, cert_type_id], fetchall=False, query_type=QueryType.GET)
+            return row if row else None
+
     def upsert_certification(
         self,
         *,
@@ -346,7 +361,6 @@ class HRRepository:
         True se esiste già un invio per lo stesso event_code/sent_to negli ultimi 'days_window' giorni.
         NB: il confronto è sulla data (CURRENT_DATE), non sul payload.
         """
-        # Esempio: days_window=7 -> blocca se esiste invio con ref_date >= oggi-6 (una volta a settimana)
         sql = """
             SELECT 1
             FROM notification_log
@@ -358,16 +372,3 @@ class HRRepository:
         with self.db_manager as db:
             row = db.execute_query(sql, [event_code, sent_to, int(days_window - 1)], fetchall=False, query_type=QueryType.GET)
         return bool(row)
-
-
-def get_latest_certification_for(self, *, operator_id: int, cert_type_id: int):
-    sql = """
-        SELECT id, operator_id, cert_type_id, file_path
-        FROM operator_certifications
-        WHERE operator_id = %s AND cert_type_id = %s
-        ORDER BY id DESC
-        LIMIT 1
-    """
-    with self.db_manager as db:
-        row = db.execute_query(sql, [operator_id, cert_type_id], fetchall=False, query_type=QueryType.GET)
-        return row if row else None
