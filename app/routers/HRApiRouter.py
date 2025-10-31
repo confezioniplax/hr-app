@@ -5,9 +5,14 @@ from pathlib import Path
 
 from app.dependencies import TokenData, get_current_manager
 from app.services.HRService import HRService
+from app.services.CompanyDocsService import CompanyDocsService  # nuovo service
 
 hr_api_router = APIRouter(prefix="/api", tags=["hr-api"])
 
+
+# ==============================
+#            HR
+# ==============================
 
 # -------- ANAGRAFICA --------
 @hr_api_router.get("/hr/operators/list")
@@ -255,7 +260,7 @@ async def hr_download_cert_latest(
 ):
     """
     Scarica SEMPRE l'ultima certificazione inserita per (operator_id, cert_type_id).
-    La "più recente" è quella con id maggiore (strategia robusta se non hai un created_at).
+    La "più recente" è quella con id maggiore (se non è presente created_at).
     """
     row = service.get_latest_certification_for(operator_id=operator_id, cert_type_id=cert_type_id)
     if not row or not row.get("file_path"):
@@ -316,3 +321,107 @@ async def hr_create_cert_type(
         return JSONResponse(status_code=200, content={"message": "Tipo certificazione creato"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Errore creazione tipo certificazione: {str(e)}")
+
+
+# ==============================
+#     DOCUMENTI AZIENDALI
+# ==============================
+
+def _to_int_or_none(v: Optional[str]) -> Optional[int]:
+    if v is None:
+        return None
+    txt = str(v).strip()
+    if txt == "":
+        return None
+    try:
+        return int(txt)
+    except Exception:
+        return None  # tollera valori non numerici
+
+@hr_api_router.get("/company-docs/list")
+async def company_docs_list(
+    q: Optional[str] = Query(default=None),
+    year: Optional[str] = Query(default=None),        # 👈 accetta stringhe vuote
+    frequency: Optional[str] = Query(default=None),   # 👈 può arrivare "" senza errori
+    service: CompanyDocsService = Depends(CompanyDocsService),
+    current_user: TokenData = Depends(get_current_manager),
+):
+    """
+    Restituisce l'elenco dei documenti con filtri facoltativi.
+    Tollerante a query come: ?q=&year=&frequency=
+    """
+    try:
+        year_int = _to_int_or_none(year)
+        data = service.list_docs(q=(q or None), year=year_int, frequency=(frequency or None))
+        return JSONResponse(status_code=200, content=data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing company documents: {str(e)}")
+
+
+@hr_api_router.post("/company-docs/upsert")
+async def company_docs_upsert(
+    id: Optional[int] = Form(default=None),
+    title: str = Form(...),
+    year: int = Form(...),
+    category: str = Form("Sicurezza"),
+    frequency: str = Form("annuale"),
+    notes: Optional[str] = Form(default=None),
+    attachment: UploadFile | None = File(None),
+    service: CompanyDocsService = Depends(CompanyDocsService),
+    current_user: TokenData = Depends(get_current_manager),
+):
+    """
+    Crea/aggiorna un documento aziendale.
+    Il salvataggio fisico e il naming li fa il service (es. /DocumentiAziendali/Sicurezza/2024/<titolo_anno>.<ext>).
+    In modifica, l'allegato è opzionale: se assente non cambia il file esistente.
+    """
+    try:
+        file_bytes = await attachment.read() if attachment and attachment.filename else None
+        doc_id = service.upsert_doc(
+            id=id,
+            title=title,
+            year=year,
+            category=category,
+            frequency=frequency,
+            notes=notes,
+            file_bytes=file_bytes,
+            original_filename=attachment.filename if file_bytes else None,
+        )
+        return JSONResponse(status_code=200, content={"message": "Document saved", "id": doc_id})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving company document: {str(e)}")
+
+
+@hr_api_router.get("/company-docs/download/{doc_id}")
+async def company_docs_download(
+    doc_id: int,
+    service: CompanyDocsService = Depends(CompanyDocsService),
+    current_user: TokenData = Depends(get_current_manager),
+):
+    """
+    Scarica l'allegato del documento.
+    """
+    row = service.get_doc(doc_id)
+    path = (row or {}).get("file_path")
+    if not path:
+        raise HTTPException(status_code=404, detail="File non presente")
+    p = Path(path)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="File non trovato su disco")
+    return FileResponse(p, filename=p.name)
+
+
+@hr_api_router.post("/company-docs/delete")
+async def company_docs_delete(
+    id: int = Form(...),
+    service: CompanyDocsService = Depends(CompanyDocsService),
+    current_user: TokenData = Depends(get_current_manager),
+):
+    """
+    Elimina un documento (solo record; il service può essere esteso per rimuovere anche il file fisico).
+    """
+    try:
+        service.delete_doc(id)
+        return JSONResponse(status_code=200, content={"message": "Document deleted"})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting company document: {str(e)}")

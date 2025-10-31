@@ -80,6 +80,13 @@
                             <i class="bi bi-people-fill me-2"></i> Anagrafiche Operatori
                         </a>
                     </li>
+                    <!-- ▼▼▼ NUOVO COLLEGAMENTO: Documenti aziendali ▼▼▼ -->
+                    <li class="nav-item">
+                        <a class="nav-link py-3 ps-4" href="/hr/documenti-aziendali">
+                            <i class="bi bi-file-earmark-text me-2"></i> Documenti aziendali
+                        </a>
+                    </li>
+                    <!-- ▲▲▲ FINE NUOVO COLLEGAMENTO ▲▲▲ -->
                 </ul>
             </div>
         </div>
@@ -97,7 +104,10 @@
     <script>
         // evidenzia il link attivo
         document.querySelectorAll('.nav-link').forEach(link => {
-            if (window.location.pathname === link.getAttribute('href')) {
+            const href = link.getAttribute('href');
+            const path = window.location.pathname;
+            // attiva se coincide o se la pagina è una sottostrada (es. /hr/documenti-aziendali/qualcosa)
+            if (path === href || (href !== '/' && path.startsWith(href))) {
                 link.classList.add('active');
             }
         });

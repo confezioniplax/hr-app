@@ -8,8 +8,10 @@ from app.services.HRService import HRService
 hr_view_router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
+
 def _layout_for(user: TokenData) -> str:
     return "layout_manager.html" if user.role in ("HR", "CEO") else "layout_employee.html"
+
 
 # --- pagina legacy certificazioni ---
 @hr_view_router.get("/hr/certificazioni", response_class=HTMLResponse, include_in_schema=False)
@@ -39,6 +41,7 @@ async def hr_certifications_page(
         },
     )
 
+
 # --- pagina dettaglio operatore ---
 @hr_view_router.get("/hr/operators/{op_id}", response_class=HTMLResponse, include_in_schema=False)
 async def hr_operator_detail_page(
@@ -52,5 +55,24 @@ async def hr_operator_detail_page(
             "request": request,
             "layout": _layout_for(current_user),
             "operator_id": op_id,
+        },
+    )
+
+
+# --- NUOVA PAGINA: Documenti aziendali (Sicurezza) ---
+@hr_view_router.get("/hr/documenti-aziendali", response_class=HTMLResponse, include_in_schema=False)
+async def hr_company_documents_page(
+    request: Request,
+    current_user: TokenData = Depends(get_current_manager),
+):
+    """
+    Vista con tabella, filtri e modale upload per i documenti aziendali.
+    Usa il template: hr_company_documents.html
+    """
+    return templates.TemplateResponse(
+        "hr_company_documents.html",
+        {
+            "request": request,
+            "layout": _layout_for(current_user),
         },
     )

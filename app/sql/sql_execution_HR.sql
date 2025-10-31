@@ -639,3 +639,19 @@ ON DUPLICATE KEY UPDATE
 
 ALTER TABLE operator_certifications
   ADD COLUMN file_path VARCHAR(255) NULL AFTER notes;
+
+
+CREATE TABLE IF NOT EXISTS company_documents (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200) NOT NULL,
+  year INT NOT NULL,
+  category VARCHAR(100) NOT NULL,
+  frequency VARCHAR(30) NOT NULL, -- es: 'annuale','semestrale','mensile','una_tantum'
+  notes VARCHAR(255) NULL,
+  file_path VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  KEY ix_year (year),
+  KEY ix_category (category),
+  KEY ix_frequency (frequency)
+);
