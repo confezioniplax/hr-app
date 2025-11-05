@@ -414,6 +414,7 @@ class HRService:
 
         header = f"""
             <h3>Certificazioni SCADUTE e in scadenza entro {days} giorni</h3>
+            <h3>Link al sito: http://192.168.0.106:8000/login</h3>            
             <p>Data: {today.strftime("%Y-%m-%d")}</p>
             <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
               <thead>
