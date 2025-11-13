@@ -234,11 +234,13 @@
 {% endblock %}
 
 {% block script %}
+
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
     (function () {
         const opId = document.querySelector('[data-operator-id]').getAttribute('data-operator-id');
 
+        // ----------------- Utilities -----------------
         function daysTo(dateStr) {
             if (!dateStr) return '';
             const t = new Date(); t.setHours(0, 0, 0, 0);
@@ -246,15 +248,143 @@
             return Math.round((d - t) / (1000 * 60 * 60 * 24));
         }
         function badge(st) {
-            const m = {
-                OK: 'success', IN_SCADENZA_30: 'warning', IN_SCADENZA_60: 'warning', IN_SCADENZA_90: 'warning',
-                SCADUTA: 'danger', MANCA: 'secondary', ND: 'dark'
-            };
+            const m = { OK: 'success', 'IN_SCADENZA_30': 'warning', 'IN_SCADENZA_60': 'warning', 'IN_SCADENZA_90': 'warning', SCADUTA: 'danger', MANCA: 'secondary', ND: 'dark' };
             return st ? `<span class="badge bg-${m[st] || 'secondary'}">${st}</span>` : '';
         }
         function getParam(name) { const u = new URL(window.location.href); return u.searchParams.get(name); }
+        function fmtISO(d) { const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), da = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${da}`; }
+        function addYears(base, y) { const d = new Date(base.getTime()); d.setFullYear(d.getFullYear() + y); return d; }
 
-        // --- load anagrafica ---
+        // ----------------- Regole scadenza -----------------
+        /**
+         * Calcola scadenza in base al testo del tipo certificazione (certText),
+         * alla data di rilascio (issueStr, YYYY-MM-DD) e alla data di nascita (birthStr) dell’operatore.
+         * Regole richieste:
+         *  - DIISOCIANATI → 5 anni
+         *  - VISITA MEDICA reparti: STAMPA / ACCOPPIAMENTO / TAGLIO / SALDATURA / MAGAZZINO → annuale
+         *  - VISITA MEDICA UFFICI → 5 anni (2 anni se età > 50 al rilascio)
+         * (Puoi estendere facilmente con altre parole chiave)
+         */
+        function computeExpiry(certText, issueStr, birthStr) {
+            if (!issueStr) return null;
+            const t = (certText || '').trim().toUpperCase();
+            const issue = new Date(issueStr + 'T00:00:00');
+
+            // DIISOCIANATI → 5 anni
+            if (/DIISOCIANATI/.test(t)) {
+                return addYears(issue, 5);
+            }
+
+            // VISITA MEDICA reparti produttivi + MAGAZZINO → annuale
+            if (/VISITA.*MEDICA/.test(t) && /(STAMPA|ACCOPPIAMENTO|TAGLIO|SALDATURA|MAGAZZINO)/.test(t)) {
+                return addYears(issue, 1);
+            }
+
+            // VISITA MEDICA UFFICI → 5 anni, ma biennale se >50 anni
+            if (/VISITA.*MEDICA/.test(t) && /UFFICI/.test(t)) {
+                if (birthStr) {
+                    const birth = new Date(birthStr + 'T00:00:00');
+                    const ageAtIssue = issue.getFullYear() - birth.getFullYear() -
+                        ((issue.getMonth() < birth.getMonth() ||
+                            (issue.getMonth() === birth.getMonth() && issue.getDate() < birth.getDate())) ? 1 : 0);
+                    return addYears(issue, ageAtIssue >= 50 ? 2 : 5);
+                }
+                return addYears(issue, 5);
+            }
+
+            // === CORSI SICUREZZA / FORMAZIONE ===
+
+            // ADDETTI AI PONTEGGI → 4 anni
+            if (/PONTEGGI/.test(t)) {
+                return addYears(issue, 4);
+            }
+
+            // PRIMO SOCCORSO / PRIMO_SOCCORSO → 3 anni
+            if (/PRIMO.*SOCCORSO/.test(t) || /PRIMO_SOCCORSO/.test(t)) {
+                return addYears(issue, 3);
+            }
+
+            // ANTINCENDIO MEDIO RISCHIO / ANTINCENDIO → 3 anni
+            if (/ANTINCENDIO.*MEDIO/.test(t) || /^ANTINCENDIO\b/.test(t)) {
+                return addYears(issue, 3);
+            }
+
+            // RLS → 1 anno
+            if (/^RLS\b/.test(t)) {
+                return addYears(issue, 1);
+            }
+
+            // PREPOSTI → 5 anni
+            if (/PREPOSTI/.test(t)) {
+                return addYears(issue, 5);
+            }
+
+            // ADDETTI MACCHINE DI CANTIERE / CARRELLI_ELEV → 5 anni
+            if (/MACCHINE.*CANTIERE/.test(t) || /CARRELLI[_ ]?ELEV/.test(t)) {
+                return addYears(issue, 5);
+            }
+
+            // RSPP → 1 anno
+            if (/^RSPP\b/.test(t)) {
+                return addYears(issue, 1);
+            }
+
+            // COORDINATORI → 5 anni
+            if (/COORDINATORI/.test(t)) {
+                return addYears(issue, 5);
+            }
+
+            // Formazione sicurezza generale / specifica → 5 anni
+            if (/SICUREZZA[_ ]?GEN/.test(t) || /SICUREZZA.*GENERALE/.test(t)) {
+                return addYears(issue, 5);
+            }
+            if (/SICUREZZA[_ ]?SPEC/.test(t) || /SICUREZZA.*SPECIFICA/.test(t)) {
+                return addYears(issue, 5);
+            }
+
+            // fallback: nessuna regola → nessuna scadenza
+            return null;
+        }
+
+
+        // ----------------- Load tipi certificazione -----------------
+        function loadCertTypes(selectedId) {
+            // ritorna una Promise per permettere .then(...)
+            return $.getJSON('/api/hr/meta/cert-types', function (list) {
+                const $sel = $('#certTypeSelect').empty().append('<option value="">Seleziona…</option>');
+                list.forEach(c => $sel.append(`<option value="${c.id}">${c.code}</option>`));
+                if (selectedId != null && selectedId !== '') {
+                    $sel.val(String(selectedId));
+                }
+            });
+        }
+
+        // ----------------- Autofill scadenza -----------------
+        function tryAutofillExpiry() {
+            const certText = $('#certTypeSelect option:selected').text() || '';
+            const issue = $('#editCertForm [name="issue_date"]').val();
+            const operatorBirth = $('input[name="birth_date"]').val(); // dall’anagrafica caricata nel form
+            const auto = computeExpiry(certText, issue, operatorBirth);
+            if (auto) {
+                const $exp = $('#editCertForm [name="expiry_date"]');
+                if (!$exp.data('touched')) {  // sovrascrivi solo se non toccata manualmente dopo ultimo cambio tipo/rilascio
+                    $exp.val(fmtISO(auto));
+                }
+            }
+        }
+
+        // L’utente ha toccato manualmente la scadenza → non sovrascrivere più finché non cambia tipo/rilascio
+        $('#editCertForm [name="expiry_date"]').on('input change', function () {
+            $(this).data('touched', true);
+        });
+
+        function resetExpiryTouchedAndRecompute() {
+            const $exp = $('#editCertForm [name="expiry_date"]');
+            $exp.data('touched', false);
+            tryAutofillExpiry();
+        }
+
+        // ----------------- Anagrafica -----------------
         function loadOperator() {
             $.getJSON(`/api/hr/operators/${opId}`, function (op) {
                 $('#op_id').val(op.id);
@@ -286,18 +416,7 @@
                 .always(() => $('#saveAnagBtn').prop('disabled', false));
         });
 
-        // --- tipi di certificazione ---
-        function loadCertTypes(selectedId) {
-            return $.getJSON('/api/hr/meta/cert-types', function (list) {
-                const $sel = $('#certTypeSelect').empty().append('<option value="">Seleziona…</option>');
-                list.forEach(c => $sel.append(`<option value="${c.id}">${c.code}</option>`));
-                if (selectedId != null && selectedId !== '') {
-                    $sel.val(String(selectedId));
-                }
-            });
-        }
-
-        // --- lista certificazioni ---
+        // ----------------- Lista certificazioni -----------------
         function loadCerts() {
             $.getJSON('/api/hr/certs/status', { operator_id: Number(opId) }, function (list) {
                 const $tb = $('#certsTable tbody').empty();
@@ -305,19 +424,19 @@
                     const hasFile = !!d.file_path;
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                    <td>${d.cert_code || ''}</td>
-                    <td>${badge(d.status_calc)}</td>
-                    <td>${d.issue_date || ''}</td>
-                    <td>${d.expiry_date || ''}</td>
-                    <td>${d.expiry_date ? daysTo(d.expiry_date) : ''}</td>
-                    <td>${d.notes ? (d.notes.length > 40 ? d.notes.substring(0, 40) + '…' : d.notes) : ''}</td>
-                    <td>
-                        <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-primary editCertBtn">Modifica</button>
-                            <button class="btn btn-outline-danger deleteCertBtn">Elimina</button>
-                            ${hasFile ? `<a class="btn btn-outline-secondary" href="/api/hr/certs/download/${d.id}" target="_blank">Scarica</a>` : ''}
-                        </div>
-                    </td>`;
+          <td>${d.cert_code || ''}</td>
+          <td>${badge(d.status_calc)}</td>
+          <td>${d.issue_date || ''}</td>
+          <td>${d.expiry_date || ''}</td>
+          <td>${d.expiry_date ? daysTo(d.expiry_date) : ''}</td>
+          <td>${d.notes ? (d.notes.length > 40 ? d.notes.substring(0, 40) + '…' : d.notes) : ''}</td>
+          <td>
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-outline-primary editCertBtn">Modifica</button>
+              <button class="btn btn-outline-danger deleteCertBtn">Elimina</button>
+              ${hasFile ? `<a class="btn btn-outline-secondary" href="/api/hr/certs/download/${d.id}" target="_blank">Scarica</a>` : ''}
+            </div>
+          </td>`;
                     $(tr).data('row', {
                         id: d.id, operator_id: d.operator_id, cert_type_id: d.cert_type_id,
                         status: d.raw_status, issue_date: d.issue_date, expiry_date: d.expiry_date, notes: d.notes,
@@ -330,56 +449,51 @@
             }).fail(() => alert('Errore nel caricamento certificazioni'));
         }
 
-        // --- apri modale in modifica ---
+        // ----------------- Modale: Modifica -----------------
         $('#certsTable').on('click', '.editCertBtn', function () {
             const r = $(this).closest('tr').data('row');
 
-            // compila form
             $('#certRowId').val(r.id || '');
             $('#certOperatorId').val(r.operator_id || opId);
             $('#editCertForm [name="status"]').val(r.status || 'ND');
             $('#editCertForm [name="issue_date"]').val(r.issue_date || '');
             $('#editCertForm [name="expiry_date"]').val(r.expiry_date || '');
             $('#editCertForm [name="notes"]').val(r.notes || '');
-            $('#certAttachment').val(''); // reset file
+            $('#certAttachment').val('');
             $('#currentFileInfo').text(r.file_path ? 'Allegato presente' : '');
 
-            // carica tipi e seleziona quello giusto, poi apri
             loadCertTypes(r.cert_type_id).then(() => {
                 const modal = new bootstrap.Modal(document.getElementById('editCertModal'));
                 modal.show();
+                // azzera flag e ricalcola per sovrascrivere anche se c'è già una scadenza
+                $('#editCertForm [name="expiry_date"]').data('touched', false);
+                tryAutofillExpiry();
             });
         });
 
-        // --- apri modale in aggiunta (pulita) ---
+        // ----------------- Modale: Aggiungi (pulita) -----------------
         document.getElementById('editCertModal').addEventListener('show.bs.modal', function (ev) {
-            // se l'apertura non viene dal tasto "Aggiungi", non pulire (già fatto sopra)
             if (ev.relatedTarget && ev.relatedTarget.matches('.btn-success')) {
-                // reset form
                 $('#editCertForm')[0].reset();
                 $('#certRowId').val('');
                 $('#certOperatorId').val(opId);
                 $('#currentFileInfo').text('');
-                loadCertTypes(null);
+                $('#editCertForm [name="expiry_date"]').data('touched', false);
+                loadCertTypes(null).then(() => tryAutofillExpiry());
             }
         });
 
-        // --- salva certificazione (multipart) ---
+        // cambia tipo/rilascio → azzera "touched" e ricalcola
+        $('#certTypeSelect').on('change', resetExpiryTouchedAndRecompute);
+        $('#editCertForm [name="issue_date"]').on('change', resetExpiryTouchedAndRecompute);
+
+        // ----------------- Salva certificazione -----------------
         $('#saveCertBtn').on('click', function () {
-            const formEl = document.getElementById('editCertForm');
-            const fd = new FormData(formEl);
-
-            // se id vuoto, non inviare il campo
+            const fd = new FormData(document.getElementById('editCertForm'));
             if (!$('#certRowId').val()) fd.delete('id');
-
-            // chiamata AJAX multipart
             $('#saveCertBtn').prop('disabled', true);
             $.ajax({
-                url: '/api/hr/certs/upsert',
-                type: 'POST',
-                data: fd,
-                processData: false,
-                contentType: false
+                url: '/api/hr/certs/upsert', type: 'POST', data: fd, processData: false, contentType: false
             })
                 .done(function () {
                     bootstrap.Modal.getInstance(document.getElementById('editCertModal')).hide();
@@ -388,12 +502,10 @@
                 .fail(function (xhr) {
                     alert('Errore salvataggio certificazione: ' + (xhr?.responseJSON?.detail || xhr?.responseText || ''));
                 })
-                .always(function () {
-                    $('#saveCertBtn').prop('disabled', false);
-                });
+                .always(function () { $('#saveCertBtn').prop('disabled', false); });
         });
 
-        // --- elimina certificazione ---
+        // ----------------- Elimina certificazione -----------------
         $('#certsTable').on('click', '.deleteCertBtn', function () {
             const r = $(this).closest('tr').data('row');
             if (!r?.id) return;
@@ -403,34 +515,21 @@
                 .fail((xhr) => alert('Errore eliminazione certificazione: ' + (xhr?.responseJSON?.detail || xhr?.responseText || '')));
         });
 
-        // --- init ---
+        // ----------------- Init -----------------
         loadOperator();
         loadCerts();
 
-        // se arrivi con ?addCert=1 apri subito la modale
         if (getParam('addCert') === '1') {
             loadCertTypes(null).then(() => {
                 const modal = new bootstrap.Modal(document.getElementById('editCertModal'));
                 modal.show();
+                $('#editCertForm [name="expiry_date"]').data('touched', false);
+                tryAutofillExpiry();
             });
         }
-
-        // Crea nuovo tipo certificazione
-        $('#createCertTypeBtn').on('click', function () {
-            const formData = $('#newCertTypeForm').serialize();
-            $('#createCertTypeBtn').prop('disabled', true);
-            $.post('/api/hr/certs/types/create', formData)
-                .done(function () {
-                    alert('Tipo certificazione creato con successo');
-                    bootstrap.Modal.getInstance(document.getElementById('newCertTypeModal')).hide();
-                    loadCertTypes(); // ricarica l'elenco nel select
-                })
-                .fail(function (xhr) {
-                    alert('Errore creazione tipo certificazione: ' + (xhr?.responseJSON?.detail || xhr?.responseText || ''));
-                })
-                .always(() => $('#createCertTypeBtn').prop('disabled', false));
-        });
-
     })();
 </script>
+
+
+
 {% endblock %}
