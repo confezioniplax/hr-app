@@ -90,11 +90,11 @@ def get_auth_token(
 
     # recipient_email = (getattr(user, "email", None) or "leonelliriccardo0@gmail.com").strip()
     recipients = [
-    "leonelliriccardo0@gmail.com",
     "p.pellegrini@plaxpackaging.it",
     "produzione@plaxpackaging.it",
     "f.fornasari@plaxpackaging.it",
-    "marco@plaxpackaging.it"
+    "marco@plaxpackaging.it",
+    "riccardo@plaxpackaging.it"
     ]
 
     for email in recipients:
