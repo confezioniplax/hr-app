@@ -335,9 +335,6 @@
             }
 
             // Formazione sicurezza generale / specifica → 5 anni
-            if (/SICUREZZA[_ ]?GEN/.test(t) || /SICUREZZA.*GENERALE/.test(t)) {
-                return addYears(issue, 5);
-            }
             if (/SICUREZZA[_ ]?SPEC/.test(t) || /SICUREZZA.*SPECIFICA/.test(t)) {
                 return addYears(issue, 5);
             }
