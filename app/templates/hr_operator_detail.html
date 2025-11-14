@@ -276,12 +276,12 @@
             }
 
             // VISITA MEDICA reparti produttivi + MAGAZZINO → annuale
-            if (/VISITA.*MEDICA/.test(t) && /(STAMPA|ACCOPPIAMENTO|TAGLIO|SALDATURA|MAGAZZINO)/.test(t)) {
+            if (/VISITA MEDICA/.test(t) && /(STAMPA|ACCOPPIAMENTO|TAGLIO|SALDATURA|MAGAZZINO)/.test(t)) {
                 return addYears(issue, 1);
             }
 
             // VISITA MEDICA UFFICI → 5 anni, ma biennale se >50 anni
-            if (/VISITA.*MEDICA/.test(t) && /UFFICI/.test(t)) {
+            if (/VISITA MEDICA/.test(t) && /UFFICI/.test(t)) {
                 if (birthStr) {
                     const birth = new Date(birthStr + 'T00:00:00');
                     const ageAtIssue = issue.getFullYear() - birth.getFullYear() -
