@@ -267,7 +267,13 @@
          */
         function computeExpiry(certText, issueStr, birthStr) {
             if (!issueStr) return null;
+
             const t = (certText || '').trim().toUpperCase();
+
+            console.log('=== computeExpiry DEBUG ===');
+            console.log('certText:', certText);
+            console.log('t:', t);
+
             const issue = new Date(issueStr + 'T00:00:00');
 
             // DIISOCIANATI → 5 anni
