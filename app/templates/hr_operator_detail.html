@@ -276,17 +276,26 @@
             }
 
             // VISITA MEDICA reparti produttivi + MAGAZZINO → annuale
-            if (/VISITA MEDICA/.test(t) && /(STAMPA|ACCOPPIAMENTO|TAGLIO|SALDATURA|MAGAZZINO)/.test(t)) {
+            if (/VISITA[\s\S]*MEDICA/.test(t) &&
+                /(STAMPA|ACCOPPIAMENTO|TAGLIO|SALDATURA|MAGAZZINO)/.test(t)) {
                 return addYears(issue, 1);
             }
 
-            // VISITA MEDICA UFFICI → 5 anni, ma biennale se >50 anni
-            if (/VISITA MEDICA/.test(t) && /UFFICI/.test(t)) {
+            // VISITA MEDICA UFFICIO/UFFICI → 5 anni, ma biennale se >50 anni
+            if (/VISITA[\s\S]*MEDICA/.test(t) && /UFFICIO(I)?/.test(t)) {
                 if (birthStr) {
                     const birth = new Date(birthStr + 'T00:00:00');
-                    const ageAtIssue = issue.getFullYear() - birth.getFullYear() -
-                        ((issue.getMonth() < birth.getMonth() ||
-                            (issue.getMonth() === birth.getMonth() && issue.getDate() < birth.getDate())) ? 1 : 0);
+                    const ageAtIssue =
+                        issue.getFullYear() - birth.getFullYear() -
+                        (
+                            issue.getMonth() < birth.getMonth() ||
+                                (
+                                    issue.getMonth() === birth.getMonth() &&
+                                    issue.getDate() < birth.getDate()
+                                )
+                                ? 1
+                                : 0
+                        );
                     return addYears(issue, ageAtIssue >= 50 ? 2 : 5);
                 }
                 return addYears(issue, 5);
@@ -304,7 +313,7 @@
                 return addYears(issue, 3);
             }
 
-            // ANTINCENDIO MEDIO RISCHIO / ANTINCENDIO → 3 anni
+            // ANTINCENDIO MEDIO RISCHIO / ANTINCENDIO → 5 anni (nel tuo codice)
             if (/ANTINCENDIO.*MEDIO/.test(t) || /^ANTINCENDIO\b/.test(t)) {
                 return addYears(issue, 5);
             }
@@ -342,7 +351,6 @@
             // fallback: nessuna regola → nessuna scadenza
             return null;
         }
-
 
         // ----------------- Load tipi certificazione -----------------
         function loadCertTypes(selectedId) {
