@@ -248,32 +248,46 @@
             return Math.round((d - t) / (1000 * 60 * 60 * 24));
         }
         function badge(st) {
-            const m = { OK: 'success', 'IN_SCADENZA_30': 'warning', 'IN_SCADENZA_60': 'warning', 'IN_SCADENZA_90': 'warning', SCADUTA: 'danger', MANCA: 'secondary', ND: 'dark' };
+            const m = {
+                OK: 'success',
+                'IN_SCADENZA_30': 'warning',
+                'IN_SCADENZA_60': 'warning',
+                'IN_SCADENZA_90': 'warning',
+                SCADUTA: 'danger',
+                MANCA: 'secondary',
+                ND: 'dark'
+            };
             return st ? `<span class="badge bg-${m[st] || 'secondary'}">${st}</span>` : '';
         }
-        function getParam(name) { const u = new URL(window.location.href); return u.searchParams.get(name); }
-        function fmtISO(d) { const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), da = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${da}`; }
-        function addYears(base, y) { const d = new Date(base.getTime()); d.setFullYear(d.getFullYear() + y); return d; }
+        function getParam(name) {
+            const u = new URL(window.location.href);
+            return u.searchParams.get(name);
+        }
+        function fmtISO(d) {
+            const y = d.getFullYear(),
+                m = String(d.getMonth() + 1).padStart(2, '0'),
+                da = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${da}`;
+        }
+        function addYears(base, y) {
+            const d = new Date(base.getTime());
+            d.setFullYear(d.getFullYear() + y);
+            return d;
+        }
 
         // ----------------- Regole scadenza -----------------
         /**
          * Calcola scadenza in base al testo del tipo certificazione (certText),
          * alla data di rilascio (issueStr, YYYY-MM-DD) e alla data di nascita (birthStr) dell’operatore.
-         * Regole richieste:
+         * Regole:
          *  - DIISOCIANATI → 5 anni
          *  - VISITA MEDICA reparti: STAMPA / ACCOPPIAMENTO / TAGLIO / SALDATURA / MAGAZZINO → annuale
-         *  - VISITA MEDICA UFFICI → 5 anni (2 anni se età > 50 al rilascio)
-         * (Puoi estendere facilmente con altre parole chiave)
+         *  - VISITA MEDICA UFFICIO/UFFICI → 5 anni (2 anni se età > 50 al rilascio)
          */
         function computeExpiry(certText, issueStr, birthStr) {
             if (!issueStr) return null;
 
             const t = (certText || '').trim().toUpperCase();
-
-            console.log('=== computeExpiry DEBUG ===');
-            console.log('certText:', certText);
-            console.log('t:', t);
-
             const issue = new Date(issueStr + 'T00:00:00');
 
             // DIISOCIANATI → 5 anni
@@ -319,7 +333,7 @@
                 return addYears(issue, 3);
             }
 
-            // ANTINCENDIO MEDIO RISCHIO / ANTINCENDIO → 5 anni (nel tuo codice)
+            // ANTINCENDIO MEDIO RISCHIO / ANTINCENDIO → 5 anni
             if (/ANTINCENDIO.*MEDIO/.test(t) || /^ANTINCENDIO\b/.test(t)) {
                 return addYears(issue, 5);
             }
@@ -372,13 +386,19 @@
 
         // ----------------- Autofill scadenza -----------------
         function tryAutofillExpiry() {
-            const certText = $('#certTypeSelect option:selected').text() || '';
+            const certTypeText = $('#certTypeSelect option:selected').text() || '';
+            const operatorDepartments = $('input[name="departments"]').val() || ''; // es. "Stampa; Taglio"
+
+            // testo complessivo su cui lavorano le regex (certificato + reparti operatore)
+            const certText = (certTypeText + ' ' + operatorDepartments);
+
             const issue = $('#editCertForm [name="issue_date"]').val();
             const operatorBirth = $('input[name="birth_date"]').val(); // dall’anagrafica caricata nel form
             const auto = computeExpiry(certText, issue, operatorBirth);
             if (auto) {
                 const $exp = $('#editCertForm [name="expiry_date"]');
-                if (!$exp.data('touched')) {  // sovrascrivi solo se non toccata manualmente dopo ultimo cambio tipo/rilascio
+                // sovrascrivi solo se non toccata manualmente dopo ultimo cambio tipo/rilascio
+                if (!$exp.data('touched')) {
                     $exp.val(fmtISO(auto));
                 }
             }
@@ -449,8 +469,13 @@
             </div>
           </td>`;
                     $(tr).data('row', {
-                        id: d.id, operator_id: d.operator_id, cert_type_id: d.cert_type_id,
-                        status: d.raw_status, issue_date: d.issue_date, expiry_date: d.expiry_date, notes: d.notes,
+                        id: d.id,
+                        operator_id: d.operator_id,
+                        cert_type_id: d.cert_type_id,
+                        status: d.raw_status,
+                        issue_date: d.issue_date,
+                        expiry_date: d.expiry_date,
+                        notes: d.notes,
                         file_path: d.file_path || null
                     });
                     if (d.status_calc === 'SCADUTA') tr.classList.add('table-danger');
@@ -504,7 +529,11 @@
             if (!$('#certRowId').val()) fd.delete('id');
             $('#saveCertBtn').prop('disabled', true);
             $.ajax({
-                url: '/api/hr/certs/upsert', type: 'POST', data: fd, processData: false, contentType: false
+                url: '/api/hr/certs/upsert',
+                type: 'POST',
+                data: fd,
+                processData: false,
+                contentType: false
             })
                 .done(function () {
                     bootstrap.Modal.getInstance(document.getElementById('editCertModal')).hide();
@@ -540,7 +569,5 @@
         }
     })();
 </script>
-
-
 
 {% endblock %}
