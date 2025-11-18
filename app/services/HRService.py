@@ -319,51 +319,6 @@ class HRService:
                 return code.upper() if code else f"CERT_{cert_type_id}"
         return f"CERT_{cert_type_id}"
 
-    def _build_attachment_dest(
-        self,
-        *,
-        operator_id: int,
-        cert_type_id: int,
-        issue_date: Optional[date],
-        expiry_date: Optional[date],
-        original_filename: str,
-    ) -> Path:
-        """
-        Costruisce il path finale per gli allegati certificazioni.
-
-        NUOVA STRUTTURA:
-            <BASE>/Certificazioni/<TIPO>/<CF>/<TIPO>_<YYYYMMDD>.<ext>
-
-        Esempio:
-            C:/DatiHR/Certificazioni/ANTINCENDIO/BRGLCU74D01C573V/ANTINCENDIO_20281011.pdf
-
-        NB: i record vecchi continuano a puntare ai vecchi path perché
-        in DB c'è il file_path completo. Questa modifica impatta solo
-        i nuovi upload.
-        """
-        base_root = Path(get_settings().CERTS_BASE_DIR)
-        root = base_root / "Certificazioni"
-
-        cf = self._safe_chunk(self._get_operator_fiscal_code(operator_id))
-        cert_code = self._safe_chunk(self._get_cert_type_code(cert_type_id))
-
-        chosen_dt = self._pick_date_for_filename(issue_date, expiry_date)
-        dstr = f"{chosen_dt:%Y%m%d}"
-
-        # estensione originale (se presente)
-        ext = ""
-        name = (original_filename or "").strip()
-        if "." in name:
-            ext = "." + name.split(".")[-1].lower()
-
-        filename = f"{cert_code}_{dstr}{ext}"
-
-        # 👇 cambiato: prima era root / cf
-        dest_dir = root / cert_code / cf
-        dest_dir.mkdir(parents=True, exist_ok=True)
-
-        return dest_dir / filename
-
     def _save_cert_attachment(
         self,
         *,
