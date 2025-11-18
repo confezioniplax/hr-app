@@ -378,21 +378,40 @@ class HRService:
         Salva fisicamente l'allegato e ritorna il percorso stringa.
         Se esiste già lo stesso nome, aggiunge suffisso __1, __2, ...
         """
-        dest = self._build_attachment_dest(
-            operator_id=operator_id,
-            cert_type_id=cert_type_id,
-            issue_date=issue_date,
-            expiry_date=expiry_date,
-            original_filename=original_filename,
-        )
-        candidate = dest
-        i = 1
-        while candidate.exists():
-            candidate = dest.with_stem(f"{dest.stem}__{i}")
-            i += 1
+    def _build_attachment_dest(
+        self,
+        *,
+        operator_id: int,
+        cert_type_id: int,
+        issue_date: Optional[date],
+        expiry_date: Optional[date],
+        original_filename: str,
+    ) -> Path:
+        """
+        Costruisce il path finale:
+            <BASE>/Certificazioni/<CF>/<TIPO>_<YYYYMMDD>.<ext>
+        """
+        base_root = Path(get_settings().CERTS_BASE_DIR)  # es. "C:/Certificazioni" o "/data"
+        root = base_root / "Certificazioni"
 
-        candidate.write_bytes(content)
-        return str(candidate)
+        cf = self._safe_chunk(self._get_operator_fiscal_code(operator_id))
+        cert_code = self._safe_chunk(self._get_cert_type_code(cert_type_id))
+
+        chosen_dt = self._pick_date_for_filename(issue_date, expiry_date)
+        dstr = f"{chosen_dt:%Y%m%d}"
+
+        ext = ""
+        name = (original_filename or "").strip()
+        if "." in name:
+            ext = "." + name.split(".")[-1].lower()
+
+        filename = f"{cert_code}_{dstr}{ext}"
+
+        # 👇 SOLO CARTELLA PER CF, NIENTE SOTTOCARTELLA PER TIPO
+        dest_dir = root / cf
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        return dest_dir / filename
 
     # -------- NOTIFICHE EMAIL SCADENZE --------
     def send_expiring_certs_email_if_needed(
