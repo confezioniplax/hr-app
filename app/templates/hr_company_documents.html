@@ -5,7 +5,7 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="mb-0">Documenti aziendali — Sicurezza</h2>
         <div class="btn-group btn-group-sm">
-            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#docModal">
+            <button class="btn btn.success btn-success" data-bs-toggle="modal" data-bs-target="#docModal">
                 + Aggiungi
             </button>
         </div>
@@ -15,11 +15,11 @@
         <div class="card-header fw-bold">Filtri</div>
         <div class="card-body">
             <form id="filters" class="row g-2">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">Ricerca</label>
                     <input type="text" class="form-control" id="q" placeholder="Titolo o note…">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label">Anno</label>
                     <input type="number" min="2000" max="2100" class="form-control" id="year">
                 </div>
@@ -34,7 +34,16 @@
                         <option value="variabile">Variabile</option>
                     </select>
                 </div>
-                <div class="col-md-2 d-flex align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Categoria</label>
+                    <select class="form-select" id="categoryFilter">
+                        <option value="">Tutte</option>
+                        {% for c in categories or [] %}
+                        <option value="{{ c.code }}">{{ c.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
                     <button type="button" id="applyFilters" class="btn btn-primary w-100">Applica</button>
                 </div>
             </form>
@@ -47,18 +56,18 @@
             <table class="table table-bordered table-striped w-100" id="docsTable">
                 <thead>
                     <tr>
-                        <th style="width:38%">Titolo</th>
+                        <th style="width:30%">Titolo</th>
                         <th style="width:10%">Anno</th>
-                        <th style="width:18%">Frequenza</th>
-                        <th style="width:18%">File</th>
-                        <th style="width:16%">Azioni</th>
+                        <th style="width:18%">Categoria</th>
+                        <th style="width:14%">Frequenza</th>
+                        <th style="width:14%">File</th>
+                        <th style="width:14%">Azioni</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
             </table>
             <small class="text-muted">
-                La colonna <em>File</em> mostra il nome archiviato. In caso di più versioni, compaiono più righe; il
-                download è sempre puntuale per riga.
+                La colonna <em>File</em> mostra il nome archiviato. Il download è puntuale per riga.
             </small>
         </div>
     </div>
@@ -91,12 +100,11 @@
                         <div class="col-md-4">
                             <label class="form-label">Categoria</label>
                             <select class="form-select" name="category" id="category">
-                                <option value="Sicurezza" selected>Sicurezza</option>
-                                <option value="Qualità">Qualità</option>
-                                <option value="HR">HR</option>
-                                <option value="Ambiente">Ambiente</option>
-                                <option value="Produzione">Produzione</option>
-                                <option value="Altro">Altro</option>
+                                {% for c in categories or [] %}
+                                <option value="{{ c.code }}" {% if loop.first %}selected{% endif %}>
+                                    {{ c.label }}
+                                </option>
+                                {% endfor %}
                             </select>
                         </div>
 
@@ -117,8 +125,10 @@
                         </div>
 
                         <div class="col-md-12">
-                            <label class="form-label">Allegato (PDF/Immagine/Doc) <small class="text-muted">(opzionale
-                                    in modifica)</small></label>
+                            <label class="form-label">
+                                Allegato (PDF/Immagine/Doc)
+                                <small class="text-muted">(opzionale in modifica)</small>
+                            </label>
                             <input class="form-control" type="file" name="attachment" id="attachment"
                                 accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
                             <div id="currentFileHelp" class="form-text"></div>
@@ -138,6 +148,12 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
     (function () {
+        const docModalEl = document.getElementById('docModal');
+
+        function getDocModalInstance() {
+            return bootstrap.Modal.getOrCreateInstance(docModalEl);
+        }
+
         // ---------- helpers ----------
         function fmtFileName(path) {
             if (!path) return '';
@@ -150,57 +166,78 @@
                 q: $('#q').val() || null,
                 year: $('#year').val() || null,
                 frequency: $('#frequency').val() || null,
+                category: $('#categoryFilter').val() || null   // 👈 filtro per code
             };
             $.getJSON('/api/company-docs/list', params, function (list) {
                 const $tb = $('#docsTable tbody').empty();
                 (list || []).forEach(d => {
                     const tr = document.createElement('tr');
+                    const catLabel = d.category_label || d.category || '';
                     tr.innerHTML = `
-          <td>${d.title || ''}</td>
-          <td>${d.year || ''}</td>
-          <td>${(d.frequency || '').toUpperCase()}</td>
-          <td>${fmtFileName(d.file_path)}</td>
-          <td>
-            <div class="btn-group btn-group-sm">
-              <a class="btn btn-outline-secondary" href="/api/company-docs/download/${d.id}">Scarica</a>
-              <button class="btn btn-outline-primary editBtn">Modifica</button>
-              <button class="btn btn-outline-danger deleteBtn">Elimina</button>
-            </div>
-          </td>`;
+                        <td>${d.title || ''}</td>
+                        <td>${d.year || ''}</td>
+                        <td>${catLabel}</td>
+                        <td>${(d.frequency || '').toUpperCase()}</td>
+                        <td>${fmtFileName(d.file_path)}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                              <a class="btn btn-outline-secondary" href="/api/company-docs/download/${d.id}">Scarica</a>
+                              <button class="btn btn-outline-primary editBtn">Modifica</button>
+                              <button class="btn btn-outline-danger deleteBtn">Elimina</button>
+                            </div>
+                        </td>`;
                     $(tr).data('row', d);
-                    $('#docsTable tbody').append(tr);
+                    $tb.append(tr);
                 });
             }).fail(xhr => {
                 alert('Errore nel caricamento documenti: ' + (xhr?.responseJSON?.detail || xhr?.responseText || ''));
             });
         }
 
-        function openModalForNew() {
+        function resetForm() {
             $('#docForm')[0].reset();
             $('#docId').val('');
             $('#currentFileHelp').text('');
-            $('#docModal').modal('show');
+            $('#attachment').val('');
+        }
+
+        function openModalForNew() {
+            resetForm();
+            // default anno = anno corrente
+            const now = new Date();
+            $('#yearInput').val(now.getFullYear());
+            // categoria di default = prima option (già selezionata da Jinja)
+            const modal = getDocModalInstance();
+            modal.show();
         }
 
         function openModalForEdit(row) {
-            $('#docForm')[0].reset();
+            resetForm();
             $('#docId').val(row.id || '');
             $('#title').val(row.title || '');
             $('#yearInput').val(row.year || '');
-            $('#category').val(row.category || 'Sicurezza');
+            // row.category_code è il code; se non c'è, uso row.category
+            $('#category').val(row.category_code || row.category || $('#category option:first').val());
             $('#frequencyInput').val(row.frequency || 'annuale');
             $('#notes').val(row.notes || '');
-            $('#attachment').val('');
-            $('#currentFileHelp').text(row.file_path ? ('File attuale: ' + fmtFileName(row.file_path)) : 'Nessun file caricato');
-            $('#docModal').modal('show');
+            $('#currentFileHelp').text(row.file_path
+                ? ('File attuale: ' + fmtFileName(row.file_path))
+                : 'Nessun file caricato');
+            const modal = getDocModalInstance();
+            modal.show();
         }
 
         // ---------- events ----------
         $('#applyFilters').on('click', loadDocs);
 
-        $('#docModal').on('show.bs.modal', function (e) {
-            // se aperto da "+ Aggiungi", pulisci i campi
-            if ($(e.relatedTarget).is('button')) openModalForNew();
+        // Apertura modale da bottone "+ Aggiungi"
+        docModalEl.addEventListener('show.bs.modal', function (e) {
+            // se viene dal bottone "+ Aggiungi", reset
+            if (e.relatedTarget && e.relatedTarget.matches('button')) {
+                resetForm();
+                const now = new Date();
+                $('#yearInput').val(now.getFullYear());
+            }
         });
 
         $('#docsTable').on('click', '.editBtn', function () {
@@ -220,8 +257,7 @@
 
         $('#saveDocBtn').on('click', function () {
             const fd = new FormData(document.getElementById('docForm'));
-            // se id è vuoto, evitare di mandare un campo vuoto a volte più comodo:
-            if (!$('#docId').val()) fd.delete('id');
+            if (!$('#docId').val()) fd.delete('id');  // se nuovo, non mandare id vuoto
 
             $('#saveDocBtn').prop('disabled', true);
             $.ajax({
@@ -232,7 +268,7 @@
                 data: fd
             })
                 .done(function () {
-                    $('#docModal').modal('hide');
+                    getDocModalInstance().hide();
                     loadDocs();
                 })
                 .fail(function (xhr) {

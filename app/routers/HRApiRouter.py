@@ -338,24 +338,51 @@ def _to_int_or_none(v: Optional[str]) -> Optional[int]:
     except Exception:
         return None  # tollera valori non numerici
 
+
 @hr_api_router.get("/company-docs/list")
 async def company_docs_list(
     q: Optional[str] = Query(default=None),
-    year: Optional[str] = Query(default=None),        # 👈 accetta stringhe vuote
-    frequency: Optional[str] = Query(default=None),   # 👈 può arrivare "" senza errori
+    year: Optional[str] = Query(default=None),        # accetta stringhe vuote
+    frequency: Optional[str] = Query(default=None),   # può arrivare "" senza errori
+    category: Optional[str] = Query(default=None),    # 👈 CODE categoria (es. 'ORG', 'DVR', 'ALTRO')
     service: CompanyDocsService = Depends(CompanyDocsService),
     current_user: TokenData = Depends(get_current_manager),
 ):
     """
     Restituisce l'elenco dei documenti con filtri facoltativi.
-    Tollerante a query come: ?q=&year=&frequency=
+    Tollerante a query come: ?q=&year=&frequency=&category=
+    category = code FK su company_doc_categories.code (es. 'ORG', 'DISP', 'ALTRO')
     """
     try:
         year_int = _to_int_or_none(year)
-        data = service.list_docs(q=(q or None), year=year_int, frequency=(frequency or None))
+        data = service.list_docs(
+            q=(q or None),
+            year=year_int,
+            frequency=(frequency or None),
+            category_code=(category or None),
+        )
         return JSONResponse(status_code=200, content=data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing company documents: {str(e)}")
+
+
+@hr_api_router.get("/company-docs/categories")
+async def company_docs_categories(
+    service: CompanyDocsService = Depends(CompanyDocsService),
+    current_user: TokenData = Depends(get_current_manager),
+):
+    """
+    Restituisce la lista delle categorie disponibili da company_doc_categories.
+    Usata dalla UI per popolare la tendina:
+      - code
+      - label
+      - sort_order
+    """
+    try:
+        cats = service.list_categories()
+        return JSONResponse(status_code=200, content=cats)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing company document categories: {str(e)}")
 
 
 @hr_api_router.post("/company-docs/upsert")
@@ -363,7 +390,8 @@ async def company_docs_upsert(
     id: Optional[int] = Form(default=None),
     title: str = Form(...),
     year: int = Form(...),
-    category: str = Form("Sicurezza"),
+    # 👇 IMPORTANTE: category ora è IL CODE (es. 'ORG','DVR','SORV_SAN','ALTRO')
+    category: str = Form("ALTRO"),
     frequency: str = Form("annuale"),
     notes: Optional[str] = Form(default=None),
     attachment: UploadFile | None = File(None),
@@ -372,7 +400,9 @@ async def company_docs_upsert(
 ):
     """
     Crea/aggiorna un documento aziendale.
-    Il salvataggio fisico e il naming li fa il service (es. /DocumentiAziendali/Sicurezza/2024/<titolo_anno>.<ext>).
+    - category DEVE essere il codice FK su company_doc_categories.code (es. 'ORG', 'DVR', 'ALTRO').
+    Il salvataggio fisico e il naming li fa il service, ad es.:
+      <BASE>/DocumentiAziendali/<CATEGORY_CODE>/<YEAR>/<titolo_sanitizzato>_<anno>.<ext>
     In modifica, l'allegato è opzionale: se assente non cambia il file esistente.
     """
     try:
@@ -381,7 +411,7 @@ async def company_docs_upsert(
             id=id,
             title=title,
             year=year,
-            category=category,
+            category=category,  # code
             frequency=frequency,
             notes=notes,
             file_bytes=file_bytes,

@@ -655,3 +655,180 @@ CREATE TABLE IF NOT EXISTS company_documents (
   KEY ix_category (category),
   KEY ix_frequency (frequency)
 );
+
+-- ==========================================================
+-- 0) Disattiva temporaneamente SQL_SAFE_UPDATES
+-- ==========================================================
+SET @OLD_SQL_SAFE_UPDATES := @@SQL_SAFE_UPDATES;
+SET SQL_SAFE_UPDATES = 0;
+
+-- ==========================================================
+-- 1) Tabella categorie documenti aziendali
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS company_doc_categories (
+  code       VARCHAR(40) PRIMARY KEY,
+  label      VARCHAR(200) NOT NULL,
+  active     TINYINT(1) NOT NULL DEFAULT 1,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Seed / aggiorna categorie standard
+INSERT INTO company_doc_categories (code, label, active, sort_order) VALUES
+  ('INF_GEN',      'INFORMAZIONI GENERALI',                     1, 10),
+  ('NOMINE',       'NOMINE',                                    1, 20),
+  ('FORM_ADESTR',  'FORMAZIONE ED ADDESTRAMENTO',               1, 30),
+  ('VAL_RISCHI',   'VALUTAZIONE DEI RISCHI',                    1, 40),
+  ('APPALTI',      'GESTIONE APPALTI',                          1, 50),
+  ('IMPIANTI_MAC', 'IMPIANTI E MACCHINARI',                     1, 60),
+  ('EMERGENZA',    'EMERGENZA',                                 1, 70),
+  ('SORV_SAN',     'SORVEGLIANZA SANITARIA',                    1, 80),
+  ('VARIE',        'VARIE',                                     1, 90)
+ON DUPLICATE KEY UPDATE
+  label      = VALUES(label),
+  active     = VALUES(active),
+  sort_order = VALUES(sort_order);
+
+-- ==========================================================
+-- 2) Normalizzazione valori già presenti in company_documents.category
+-- ==========================================================
+
+-- Togli spazi iniziali/finali
+UPDATE company_documents
+SET category = TRIM(category)
+WHERE category IS NOT NULL;
+
+-- Porta tutto in maiuscolo per facilitare i match testuali
+UPDATE company_documents
+SET category = UPPER(category)
+WHERE category IS NOT NULL AND category <> UPPER(category);
+
+-- ==========================================================
+-- 3) Mappatura testuale → codici ufficiali
+--    (adatta questi IN() se hai usato nomi diversi)
+-- ==========================================================
+
+-- INFORMAZIONI GENERALI
+UPDATE company_documents
+SET category = 'INF_GEN'
+WHERE category IN (
+  'INFORMAZIONI GENERALI',
+  'INFO GENERALI',
+  'INFORMAZIONI GENERALI PLAX',
+  'INF_GEN'
+);
+
+-- NOMINE
+UPDATE company_documents
+SET category = 'NOMINE'
+WHERE category IN (
+  'NOMINE',
+  'NOMINE VARIE'
+);
+
+-- FORMAZIONE ED ADDESTRAMENTO
+UPDATE company_documents
+SET category = 'FORM_ADESTR'
+WHERE category IN (
+  'FORMAZIONE ED ADDESTRAMENTO',
+  'FORMAZIONE',
+  'ADDESTRAMENTO',
+  'FORMAZIONE/ADDESTRAMENTO'
+);
+
+-- VALUTAZIONE DEI RISCHI
+UPDATE company_documents
+SET category = 'VAL_RISCHI'
+WHERE category IN (
+  'VALUTAZIONE DEI RISCHI',
+  'DOCUMENTO VALUTAZIONE RISCHI',
+  'DVR',
+  'VAL_RISCHI'
+);
+
+-- GESTIONE APPALTI
+UPDATE company_documents
+SET category = 'APPALTI'
+WHERE category IN (
+  'GESTIONE APPALTI',
+  'APPALTI',
+  'APPALTI E CONTRATTI'
+);
+
+-- IMPIANTI E MACCHINARI
+UPDATE company_documents
+SET category = 'IMPIANTI_MAC'
+WHERE category IN (
+  'IMPIANTI E MACCHINARI',
+  'IMPIANTI',
+  'MACCHINARI',
+  'IMPIANTI/MACCHINARI'
+);
+
+-- EMERGENZA
+UPDATE company_documents
+SET category = 'EMERGENZA'
+WHERE category IN (
+  'EMERGENZA',
+  'GESTIONE EMERGENZE',
+  'PIANO EMERGENZA'
+);
+
+-- SORVEGLIANZA SANITARIA
+UPDATE company_documents
+SET category = 'SORV_SAN'
+WHERE category IN (
+  'SORVEGLIANZA SANITARIA',
+  'SORV_SAN',
+  'VISITE MEDICHE',
+  'SANITARIA'
+);
+
+-- ==========================================================
+-- 4) Tutto ciò che non mappa a una categoria valida → VARIE
+-- ==========================================================
+
+UPDATE company_documents cd
+LEFT JOIN company_doc_categories c
+       ON cd.category = c.code
+SET cd.category = 'VARIE'
+WHERE c.code IS NULL
+   OR cd.category IS NULL
+   OR cd.category = '';
+
+-- ==========================================================
+-- 5) Allinea definizione colonna + aggiungi vincolo FK
+-- ==========================================================
+
+-- Stringi la colonna alla stessa dimensione del codice (40)
+ALTER TABLE company_documents
+  MODIFY category VARCHAR(40) NOT NULL;
+
+-- Se esiste già una FK con lo stesso nome, eliminala (idempotente)
+SET @fk_exists := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'company_documents'
+    AND CONSTRAINT_NAME = 'fk_company_docs_category'
+    AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+);
+
+SET @sql_drop_fk := IF(@fk_exists > 0,
+  'ALTER TABLE company_documents DROP FOREIGN KEY fk_company_docs_category',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql_drop_fk; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Aggiungi la foreign key
+ALTER TABLE company_documents
+  ADD CONSTRAINT fk_company_docs_category
+    FOREIGN KEY (category) REFERENCES company_doc_categories(code);
+
+-- ==========================================================
+-- 6) Ripristina SQL_SAFE_UPDATES
+-- ==========================================================
+SET SQL_SAFE_UPDATES = @OLD_SQL_SAFE_UPDATES;
+
+-- 

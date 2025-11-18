@@ -13,7 +13,7 @@ class CompanyDocsService:
     """
     Gestione Documenti Aziendali (organigramma, verbali, sorveglianze, ecc.)
     - Salvataggio file su disco
-    - Naming: <titolo_sanitizzato>_<anno>.<ext> in /DocumentiAziendali/<categoria>/<anno>/
+    - Naming: <titolo_sanitizzato>_<anno>.<ext> in /DocumentiAziendali/<categoria_code>/<anno>/
     - Se il file esiste, aggiunge suffisso __1, __2, ...
     """
 
@@ -21,9 +21,30 @@ class CompanyDocsService:
         self.repo = CompanyDocsRepository()
 
     # -------- LISTA --------
-    def list_docs(self, q: Optional[str] = None, year: Optional[int] = None,
-                  frequency: Optional[str] = None) -> List[Dict[str, Any]]:
-        rows = self.repo.list_docs(q=q, year=year, frequency=frequency)
+    def list_docs(
+        self,
+        q: Optional[str] = None,
+        year: Optional[int] = None,
+        frequency: Optional[str] = None,
+        category_code: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        rows = self.repo.list_docs(
+            q=q,
+            year=year,
+            frequency=frequency,
+            category_code=category_code,
+        )
+        return self._encode(rows)
+
+    # -------- CATEGORIE (per UI) --------
+    def list_categories(self) -> List[Dict[str, Any]]:
+        """
+        Ritorna le categorie da company_doc_categories:
+        - code
+        - label
+        - sort_order
+        """
+        rows = self.repo.list_categories()
         return self._encode(rows)
 
     # -------- GET --------
@@ -38,7 +59,7 @@ class CompanyDocsService:
         id: Optional[int],
         title: str,
         year: int,
-        category: str,
+        category: str,              # 👈 deve essere IL CODE (es. 'ORG', 'DVR', 'ALTRO')
         frequency: str,
         notes: Optional[str],
         file_bytes: Optional[bytes],
@@ -50,12 +71,18 @@ class CompanyDocsService:
         """
         # 1) normalizza campi base
         title = (title or "").strip()
-        category = (category or "Generale").strip()
+        if not title:
+            raise ValueError("Titolo documento obbligatorio")
+
+        # category = code FK su company_doc_categories.code
+        category_code = (category or "").strip().upper() or "ALTRO"
         frequency = (frequency or "annuale").strip()
         notes = (notes or None)
 
-        if not title:
-            raise ValueError("Titolo documento obbligatorio")
+        # (opzionale ma sano) validazione contro le categorie note
+        valid_codes = {c["code"] for c in self.repo.list_categories()}
+        if category_code not in valid_codes:
+            raise ValueError(f"Categoria non valida: {category_code}")
 
         # 2) salva l'allegato (se presente)
         file_path: Optional[str] = None
@@ -63,7 +90,7 @@ class CompanyDocsService:
             file_path = self._save_attachment(
                 title=title,
                 year=int(year),
-                category=category,
+                category_code=category_code,
                 original_filename=original_filename,
                 content=file_bytes,
             )
@@ -74,7 +101,7 @@ class CompanyDocsService:
                 id=id,
                 title=title,
                 year=int(year),
-                category=category,
+                category=category_code,
                 frequency=frequency,
                 notes=notes,
                 file_path=file_path,  # None => non modificare
@@ -104,9 +131,20 @@ class CompanyDocsService:
         base = getattr(settings, "DOCS_BASE_DIR", None) or settings.CERTS_BASE_DIR
         return Path(base) / "DocumentiAziendali"
 
-    def _build_dest_path(self, *, title: str, year: int, category: str, original_filename: str) -> Path:
+    def _build_dest_path(
+        self,
+        *,
+        title: str,
+        year: int,
+        category_code: str,
+        original_filename: str,
+    ) -> Path:
+        """
+        Path finale:
+            <BASE>/DocumentiAziendali/<CATEGORY_CODE>/<YEAR>/<titolo>_<anno>.<ext>
+        """
         root = self._base_docs_root()
-        cat = self._safe_chunk(category) or "Generale"
+        cat = self._safe_chunk(category_code or "ALTRO")
         yr = str(int(year))
 
         ext = ""
@@ -119,10 +157,24 @@ class CompanyDocsService:
         dest_dir.mkdir(parents=True, exist_ok=True)
         return dest_dir / fname
 
-    def _save_attachment(self, *, title: str, year: int, category: str,
-                         original_filename: str, content: bytes) -> str:
+    def _save_attachment(
+        self,
+        *,
+        title: str,
+        year: int,
+        category_code: str,
+        original_filename: str,
+        content: bytes,
+    ) -> str:
+        """
+        Salva fisicamente il file e ritorna il path stringa.
+        Gestisce il suffisso __1, __2, ... se già esiste un file con lo stesso nome.
+        """
         dest = self._build_dest_path(
-            title=title, year=year, category=category, original_filename=original_filename
+            title=title,
+            year=year,
+            category_code=category_code,
+            original_filename=original_filename,
         )
         candidate = dest
         i = 1

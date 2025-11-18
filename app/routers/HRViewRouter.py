@@ -4,6 +4,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.dependencies import TokenData, get_current_manager
 from app.services.HRService import HRService
+from app.services.CompanyDocsService import CompanyDocsService  # 👈 IMPORT NUOVO
 
 hr_view_router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -64,15 +65,22 @@ async def hr_operator_detail_page(
 async def hr_company_documents_page(
     request: Request,
     current_user: TokenData = Depends(get_current_manager),
+    docs_svc: CompanyDocsService = Depends(CompanyDocsService),
 ):
     """
     Vista con tabella, filtri e modale upload per i documenti aziendali.
     Usa il template: hr_company_documents.html
     """
+    try:
+        categories = docs_svc.list_categories()  # [{code, label, sort_order}]
+    except Exception:
+        categories = []
+
     return templates.TemplateResponse(
         "hr_company_documents.html",
         {
             "request": request,
             "layout": _layout_for(current_user),
+            "categories": categories,  # 👈 la UI potrà popolare la select con questi
         },
     )
