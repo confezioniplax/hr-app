@@ -292,7 +292,7 @@ class HRService:
         if val is not None and val < 0:
             raise ValueError(f"{field} non può essere negativo")
 
-    # ---------- File path logic ----------
+        # ---------- File path logic ----------
     def _safe_chunk(self, s: str) -> str:
         """Sanifica una parte di percorso/nome file."""
         return re.sub(r"[^A-Za-z0-9_.-]+", "_", (s or "").strip())
@@ -319,20 +319,6 @@ class HRService:
                 return code.upper() if code else f"CERT_{cert_type_id}"
         return f"CERT_{cert_type_id}"
 
-    def _save_cert_attachment(
-        self,
-        *,
-        operator_id: int,
-        cert_type_id: int,
-        issue_date: Optional[date],
-        expiry_date: Optional[date],
-        original_filename: str,
-        content: bytes,
-    ) -> str:
-        """
-        Salva fisicamente l'allegato e ritorna il percorso stringa.
-        Se esiste già lo stesso nome, aggiunge suffisso __1, __2, ...
-        """
     def _build_attachment_dest(
         self,
         *,
@@ -346,7 +332,7 @@ class HRService:
         Costruisce il path finale:
             <BASE>/Certificazioni/<CF>/<TIPO>_<YYYYMMDD>.<ext>
         """
-        base_root = Path(get_settings().CERTS_BASE_DIR)  # es. "C:/Certificazioni" o "/data"
+        base_root = Path(get_settings().CERTS_BASE_DIR)  # es. "C:/Qualcosa" o "/data"
         root = base_root / "Certificazioni"
 
         cf = self._safe_chunk(self._get_operator_fiscal_code(operator_id))
@@ -362,11 +348,42 @@ class HRService:
 
         filename = f"{cert_code}_{dstr}{ext}"
 
-        # 👇 SOLO CARTELLA PER CF, NIENTE SOTTOCARTELLA PER TIPO
+        # 👉 SOLO CARTELLA PER CF, niente sottocartella per tipo
         dest_dir = root / cf
         dest_dir.mkdir(parents=True, exist_ok=True)
 
         return dest_dir / filename
+
+    def _save_cert_attachment(
+        self,
+        *,
+        operator_id: int,
+        cert_type_id: int,
+        issue_date: Optional[date],
+        expiry_date: Optional[date],
+        original_filename: str,
+        content: bytes,
+    ) -> str:
+        """
+        Salva fisicamente l'allegato e ritorna il percorso stringa.
+        Se esiste già lo stesso nome, aggiunge suffisso __1, __2, ...
+        """
+        dest = self._build_attachment_dest(
+            operator_id=operator_id,
+            cert_type_id=cert_type_id,
+            issue_date=issue_date,
+            expiry_date=expiry_date,
+            original_filename=original_filename,
+        )
+
+        candidate = dest
+        i = 1
+        while candidate.exists():
+            candidate = dest.with_stem(f"{dest.stem}__{i}")
+            i += 1
+
+        candidate.write_bytes(content)
+        return str(candidate)
 
     # -------- NOTIFICHE EMAIL SCADENZE --------
     def send_expiring_certs_email_if_needed(
