@@ -329,10 +329,19 @@ class HRService:
         original_filename: str,
     ) -> Path:
         """
-        Costruisce il path finale:
-            <BASE>/Certificazioni/<CF>/<TIPO>_<YYYYMMDD>.<ext>
+        Costruisce il path finale per gli allegati certificazioni.
+
+        NUOVA STRUTTURA:
+            <BASE>/Certificazioni/<TIPO>/<CF>/<TIPO>_<YYYYMMDD>.<ext>
+
+        Esempio:
+            C:/DatiHR/Certificazioni/ANTINCENDIO/BRGLCU74D01C573V/ANTINCENDIO_20281011.pdf
+
+        NB: i record vecchi continuano a puntare ai vecchi path perché
+        in DB c'è il file_path completo. Questa modifica impatta solo
+        i nuovi upload.
         """
-        base_root = Path(get_settings().CERTS_BASE_DIR)  # configurabile: es. "C:/Certificazioni" o "/data"
+        base_root = Path(get_settings().CERTS_BASE_DIR)
         root = base_root / "Certificazioni"
 
         cf = self._safe_chunk(self._get_operator_fiscal_code(operator_id))
@@ -348,8 +357,11 @@ class HRService:
             ext = "." + name.split(".")[-1].lower()
 
         filename = f"{cert_code}_{dstr}{ext}"
-        dest_dir = root / cf
+
+        # 👇 cambiato: prima era root / cf
+        dest_dir = root / cert_code / cf
         dest_dir.mkdir(parents=True, exist_ok=True)
+
         return dest_dir / filename
 
     def _save_cert_attachment(
