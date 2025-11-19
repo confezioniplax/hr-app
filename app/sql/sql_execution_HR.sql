@@ -690,6 +690,15 @@ ON DUPLICATE KEY UPDATE
   active     = VALUES(active),
   sort_order = VALUES(sort_order);
 
+
+  -- Seed / aggiorna categorie standard
+INSERT INTO company_doc_categories (code, label, active, sort_order) VALUES
+  ('MODULI',      'MODULI DA COMPILARE',                     1, 100)
+ON DUPLICATE KEY UPDATE
+  label      = VALUES(label),
+  active     = VALUES(active),
+  sort_order = VALUES(sort_order);
+
 -- ==========================================================
 -- 2) Normalizzazione valori già presenti in company_documents.category
 -- ==========================================================
