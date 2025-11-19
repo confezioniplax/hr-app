@@ -691,13 +691,55 @@ ON DUPLICATE KEY UPDATE
   sort_order = VALUES(sort_order);
 
 
-  -- Seed / aggiorna categorie standard
 INSERT INTO company_doc_categories (code, label, active, sort_order) VALUES
   ('MODULI',      'MODULI DA COMPILARE',                     1, 100)
 ON DUPLICATE KEY UPDATE
   label      = VALUES(label),
   active     = VALUES(active),
   sort_order = VALUES(sort_order);
+
+INSERT INTO archivio.company_doc_categories (code, label, active, sort_order) VALUES
+  ('INQ',      'INQUADRAMENTO AZIENDA',                     1, 110)
+ON DUPLICATE KEY UPDATE
+  label      = VALUES(label),
+  active     = VALUES(active),
+  sort_order = VALUES(sort_order);  
+
+  INSERT INTO archivio.company_doc_categories (code, label, active, sort_order) VALUES
+  ('AMB', 'DOCUMENTI GENERALI AMBIENTE', 1, 120)
+ON DUPLICATE KEY UPDATE
+  label = VALUES(label),
+  active = VALUES(active),
+  sort_order = VALUES(sort_order);
+
+INSERT INTO archivio.company_doc_categories (code, label, active, sort_order) VALUES
+  ('IDR', 'APPROVVIGIONAMENTO E SCARICHI IDRICO', 1, 130)
+ON DUPLICATE KEY UPDATE
+  label = VALUES(label),
+  active = VALUES(active),
+  sort_order = VALUES(sort_order);
+
+INSERT INTO archivio.company_doc_categories (code, label, active, sort_order) VALUES
+  ('ATM', 'EMISSIONI IN ATMOSFERA', 1, 140)
+ON DUPLICATE KEY UPDATE
+  label = VALUES(label),
+  active = VALUES(active),
+  sort_order = VALUES(sort_order);
+
+INSERT INTO archivio.company_doc_categories (code, label, active, sort_order) VALUES
+  ('SAS', 'SUOLO, SOTTOSUOLO E ACQUE SOTTERRANEE', 1, 150)
+ON DUPLICATE KEY UPDATE
+  label = VALUES(label),
+  active = VALUES(active),
+  sort_order = VALUES(sort_order);
+
+INSERT INTO archivio.company_doc_categories (code, label, active, sort_order) VALUES
+  ('RIF', 'RIFIUTI', 1, 160)
+ON DUPLICATE KEY UPDATE
+  label = VALUES(label),
+  active = VALUES(active),
+  sort_order = VALUES(sort_order);
+
 
 -- ==========================================================
 -- 2) Normalizzazione valori già presenti in company_documents.category
