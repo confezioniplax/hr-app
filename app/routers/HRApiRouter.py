@@ -345,10 +345,18 @@ async def hr_download_cert(
     row = service.get_certification(cert_id)
     path = (row or {}).get("file_path")
     if not path:
-        raise HTTPException(status_code=404, detail="File non presente")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Nessun file_path registrato per la certificazione (id={cert_id})"
+        )
+
     p = Path(path)
     if not p.exists():
-        raise HTTPException(status_code=404, detail="File non trovato su disco")
+        raise HTTPException(
+            status_code=404,
+            detail=f"{p}  --  File non trovato su disco"
+        )
+
     return FileResponse(p, filename=p.name)
 
 
@@ -365,10 +373,19 @@ async def hr_download_cert_latest(
     """
     row = service.get_latest_certification_for(operator_id=operator_id, cert_type_id=cert_type_id)
     if not row or not row.get("file_path"):
-        raise HTTPException(status_code=404, detail="Nessun allegato trovato per l'ultima certificazione")
-    p = Path(row["file_path"])
+        raise HTTPException(
+            status_code=404,
+            detail=f"Nessun allegato trovato per l'ultima certificazione (operator_id={operator_id}, cert_type_id={cert_type_id})"
+        )
+
+    path = row["file_path"]
+    p = Path(path)
     if not p.exists():
-        raise HTTPException(status_code=404, detail="File non trovato su disco")
+        raise HTTPException(
+            status_code=404,
+            detail=f"{p}  --  File non trovato su disco"
+        )
+
     return FileResponse(p, filename=p.name)
 
 
@@ -535,10 +552,18 @@ async def company_docs_download(
     row = service.get_doc(doc_id)
     path = (row or {}).get("file_path")
     if not path:
-        raise HTTPException(status_code=404, detail="File non presente")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Nessun file_path registrato per il documento (id={doc_id})"
+        )
+
     p = Path(path)
     if not p.exists():
-        raise HTTPException(status_code=404, detail="File non trovato su disco")
+        raise HTTPException(
+            status_code=404,
+            detail=f"{p}  --  File non trovato su disco"
+        )
+
     return FileResponse(p, filename=p.name)
 
 
