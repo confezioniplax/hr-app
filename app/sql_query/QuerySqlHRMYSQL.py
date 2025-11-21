@@ -36,11 +36,8 @@ class QuerySqlHRMYSQL:
     @staticmethod
     def list_operator_core_sql(filter_by_department: bool = False) -> str:
         """
-        Restituisce (campi principali per tabella anagrafica):
-        id, operator_name, email, phone, fiscal_code, birth_date, citizenship, education_level,
-        hire_date, contract_type, contract_expiry, `level`, ral, address, active, departments
-        Se filter_by_department=True, richiede in testa il parametro department_id per la JOIN odf.
-        Le condizioni runtime vengono inserite in {{extra_conditions}} (doppie graffe nelle f-string).
+        Restituisce i campi principali dell’anagrafica operatori.
+        Ora include anche o.job_title.
         """
         join_dep_filter = (
             "INNER JOIN operator_departments odf ON odf.operator_id = o.id AND odf.department_id = %s"
@@ -62,6 +59,7 @@ class QuerySqlHRMYSQL:
                 o.`level`,
                 o.ral,
                 o.address,
+                o.job_title,     -- 👈 nuovo campo
                 o.active,
                 dep.departments
             FROM operators o
@@ -78,10 +76,9 @@ class QuerySqlHRMYSQL:
             ORDER BY operator_name
         """
 
-
     @staticmethod
     def get_operator_sql() -> str:
-        """Dettaglio operatore con reparti aggregati."""
+        """Dettaglio operatore, aggiornato con job_title."""
         return """
             SELECT 
                 o.id,
@@ -100,12 +97,13 @@ class QuerySqlHRMYSQL:
                 o.email,
                 o.birth_place,
                 o.address,
+                o.job_title,     -- 👈 nuovo campo
                 o.active,
                 (
-                SELECT GROUP_CONCAT(DISTINCT d.name ORDER BY d.name SEPARATOR '; ')
-                FROM operator_departments od
-                JOIN departments d ON d.id = od.department_id
-                WHERE od.operator_id = o.id
+                    SELECT GROUP_CONCAT(DISTINCT d.name ORDER BY d.name SEPARATOR '; ')
+                    FROM operator_departments od
+                    JOIN departments d ON d.id = od.department_id
+                    WHERE od.operator_id = o.id
                 ) AS departments
             FROM operators o
             WHERE o.id = %s
@@ -114,20 +112,24 @@ class QuerySqlHRMYSQL:
 
     @staticmethod
     def insert_operator_sql() -> str:
-        """Creazione nuova anagrafica (con campi nuovi inclusi)."""
+        """Creazione nuova anagrafica, ora include job_title."""
         return """
             INSERT INTO operators
                 (first_name, last_name, fiscal_code, phone, email, address,
-                birth_date, citizenship, education_level,
-                hire_date, contract_type, contract_expiry, `level`, ral, active)
+                 birth_date, citizenship, education_level,
+                 hire_date, contract_type, contract_expiry, `level`, ral,
+                 job_title,     -- 👈 aggiunto qui
+                 active)
             VALUES (%s,%s,%s,%s,%s,%s,
                     %s,%s,%s,
-                    %s,%s,%s,%s,%s,%s)
+                    %s,%s,%s,%s,%s,
+                    %s,           -- job_title
+                    %s)
         """
 
     @staticmethod
     def update_operator_sql() -> str:
-        """Update anagrafica"""
+        """Update anagrafica, ora include job_title."""
         return """
             UPDATE operators
             SET first_name      = %s,
@@ -144,6 +146,7 @@ class QuerySqlHRMYSQL:
                 ral             = %s,
                 email           = %s,
                 address         = %s,
+                job_title       = %s,   -- 👈 aggiunto
                 active          = %s
             WHERE id = %s
         """
@@ -151,10 +154,6 @@ class QuerySqlHRMYSQL:
     # ---------- CERTIFICAZIONI ----------
     @staticmethod
     def list_cert_status_sql(filter_by_department: bool = False) -> str:
-        """
-        Condizioni runtime in {{extra_conditions}}. Se filter_by_department=True,
-        in testa ai params ci sarà department_id per la JOIN odf.
-        """
         join_dep_filter = (
             "INNER JOIN operator_departments odf ON odf.operator_id = o.id AND odf.department_id = %s"
             if filter_by_department else ""
@@ -170,17 +169,13 @@ class QuerySqlHRMYSQL:
     oc.issue_date,
     oc.expiry_date,
     oc.notes,
-    oc.file_path,          -- 👈 aggiunto per la UI (download)
+    oc.file_path,
     oc.id,
     CASE
         WHEN oc.id IS NULL THEN 'MANCA'
         WHEN oc.status = 'ND' THEN 'ND'
-
-        -- se la data è richiesta o comunque presente ma nulla → ND
         WHEN (COALESCE(t.requires_expiry,0) = 1 OR oc.expiry_date IS NOT NULL)
              AND oc.expiry_date IS NULL THEN 'ND'
-
-        -- se esiste una data, valuta la scadenza a prescindere da requires_expiry
         WHEN oc.expiry_date IS NOT NULL AND DATE(oc.expiry_date) <  CURRENT_DATE() THEN 'SCADUTA'
         WHEN oc.expiry_date IS NOT NULL AND DATE(oc.expiry_date) <= CURRENT_DATE() + INTERVAL 30 DAY THEN 'IN_SCADENZA_30'
         WHEN oc.expiry_date IS NOT NULL AND DATE(oc.expiry_date) <= CURRENT_DATE() + INTERVAL 60 DAY THEN 'IN_SCADENZA_60'
@@ -224,14 +219,10 @@ ON DUPLICATE KEY UPDATE
   notes = VALUES(notes),
   file_path = COALESCE(VALUES(file_path), file_path),
   id = LAST_INSERT_ID(id)
-
         """
 
     @staticmethod
     def get_certification_sql() -> str:
-        """
-        Restituisce la certificazione per id (per download allegato).
-        """
         return """
             SELECT id, operator_id, cert_type_id, file_path
             FROM operator_certifications
@@ -259,7 +250,6 @@ ON DUPLICATE KEY UPDATE
             """
         else:
             return "SELECT COUNT(*) AS n FROM operators WHERE active = 1"
-
 
     @staticmethod
     def list_expiring_certs_sql(filter_by_department: bool = False) -> str:
@@ -289,10 +279,8 @@ ON DUPLICATE KEY UPDATE
             ) dep ON dep.operator_id = o.id
             WHERE o.active = 1
               AND oc.expiry_date IS NOT NULL
-              -- ✅ includi TUTTE le scadute e quelle che scadono entro N giorni
               AND DATE(oc.expiry_date) <= CURRENT_DATE() + INTERVAL %s DAY
             ORDER BY
-              -- prima le più critiche: già scadute (days_left < 0), poi oggi (0), poi crescenti
               (CASE WHEN DATEDIFF(oc.expiry_date, CURRENT_DATE()) < 0 THEN 0 ELSE 1 END) ASC,
               DATEDIFF(oc.expiry_date, CURRENT_DATE()) ASC,
               operator_name ASC,

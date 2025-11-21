@@ -1,7 +1,7 @@
 {% extends "layout_manager.html" %}
 {% block content %}
 <div class="container-fluid mt-4">
-        <!-- HEADER -->
+    <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <h2 class="mb-0">Dashboard HR — <span class="text-primary">Anagrafica</span></h2>
@@ -9,8 +9,13 @@
         </div>
         <div class="d-flex gap-2">
             <!-- NUOVO: bottone per creare una nuova anagrafica -->
-            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#newOpModal">+ Nuovo
-                operatore</button>
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#newOpModal">
+                + Nuovo operatore
+            </button>
+            <!-- NUOVO: export Excel -->
+            <button class="btn btn-outline-primary" id="exportExcelBtn">
+                Export Excel
+            </button>
             <!-- <a href="/home-operators" class="btn btn-outline-secondary">← Torna alla Home</a> -->
         </div>
     </div>
@@ -29,7 +34,9 @@
                     <option value="">Tutti…</option>
                     {% for d in departments or [] %}
                     <option value="{{ d.id }}" {% if selected_department_id and d.id==selected_department_id
-                        %}selected{% endif %}>{{ d.name }}</option>
+                        %}selected{% endif %}>
+                        {{ d.name }}
+                    </option>
                     {% endfor %}
                 </select>
             </div>
@@ -62,8 +69,6 @@
                     <th>Assunzione</th>
                     <th>Tipo contratto</th>
                     <th>Scadenza</th>
-                    <th>Livello</th>
-                    <th>RAL</th>
                     <th>Stato</th>
                     <th>Azioni</th>
                 </tr>
@@ -113,15 +118,17 @@
                         <label class="form-label">Nascita</label>
                         <input name="birth_date" type="date" class="form-control">
                     </div>
+
                     <!-- NUOVI CAMPI -->
                     <div class="col-md-4">
                         <label class="form-label">Cittadinanza</label>
                         <input name="citizenship" class="form-control" placeholder="es. Italiana, Rumena">
                     </div>
-                    
+
                     <div class="col-md-4">
                         <label class="form-label">Titolo di studio</label>
-                        <input list="educationOptions" name="education_level" class="form-control" placeholder="es. Diploma, Laurea…">
+                        <input list="educationOptions" name="education_level" class="form-control"
+                            placeholder="es. Diploma, Laurea…">
                         <datalist id="educationOptions">
                             <option value="Nessuno">
                             <option value="Licenza media">
@@ -147,14 +154,6 @@
                     <div class="col-md-4">
                         <label class="form-label">Scadenza contratto</label>
                         <input name="contract_expiry" type="date" class="form-control">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Livello</label>
-                        <input name="level" class="form-control" placeholder="es. 4, 4S, Q">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">RAL (€)</label>
-                        <input name="ral" class="form-control" placeholder="es. 35.500,00">
                     </div>
 
                     <div class="col-md-8">
@@ -211,19 +210,22 @@
             { data: 'hire_date', title: 'Assunzione', defaultContent: '' },
             { data: 'contract_type', title: 'Tipo contratto', defaultContent: '' },
             { data: 'contract_expiry', title: 'Scadenza', defaultContent: '' },
-            { data: 'level', title: 'Livello', defaultContent: '' },
-            { data: 'ral', title: 'RAL', defaultContent: '', render: v => v ?? '' },
             {
-                data: 'active', title: 'Stato', render: v => v
+                data: 'active',
+                title: 'Stato',
+                render: v => v
                     ? '<span class="badge bg-success">Attivo</span>'
                     : '<span class="badge bg-secondary">Non attivo</span>'
             },
             {
-                data: null, title: 'Azioni', orderable: false, render: d => `
-          <div class="btn-group btn-group-sm">
-            <a class="btn btn-info" href="/hr/operators/${d.id}">Dettaglio</a>
-            <a class="btn btn-outline-primary" href="/hr/operators/${d.id}?addCert=1">Aggiungi cert.</a>
-          </div>`
+                data: null,
+                title: 'Azioni',
+                orderable: false,
+                render: d => `
+                        <div class="btn-group btn-group-sm">
+                            <a class="btn btn-info" href="/hr/operators/${d.id}">Dettaglio</a>
+                            <a class="btn btn-outline-primary" href="/hr/operators/${d.id}?addCert=1">Aggiungi cert.</a>
+                        </div>`
             }
         ],
         pageLength: 25
@@ -265,18 +267,23 @@
             })
             .always(() => $('#createOpBtn').prop('disabled', false));
     });
-});
+
+    // EXPORT EXCEL: usa gli stessi filtri della lista
+    $('#exportExcelBtn').on('click', function () {
+        const params = buildAnagParams();
+        const query = $.param(params);
+        const url = '/api/hr/operators/export' + (query ? '?' + query : '');
+        window.location.href = url;
+    });
+
+    });
 </script>
 {% endblock %}
 
 <style>
-    
-
     /* assicura che DataTables non si restringa */
     #operatorsTable.dataTable,
     #operatorsTable {
         width: 100% !important;
     }
-
-    
 </style>

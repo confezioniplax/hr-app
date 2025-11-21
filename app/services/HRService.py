@@ -50,6 +50,7 @@ class HRService:
         contract_expiry: Optional[str] = None,
         level: Optional[str] = None,
         ral: Optional[str] = None,
+        job_title: Optional[str] = None,       # 👈 nuovo campo mansione
         departments: Optional[str] = None,
         active: Optional[int] = 1,
     ) -> int:
@@ -77,6 +78,7 @@ class HRService:
                 contract_expiry=ce,
                 level=(level or "").strip() or None,
                 ral=rl,
+                job_title=(job_title or "").strip() or None,   # 👈 passa al repo
                 departments=(departments or "").strip() or None,
                 active=act,
             )
@@ -100,6 +102,7 @@ class HRService:
         ral: Optional[str] = None,
         email: Optional[str] = None,
         address: Optional[str] = None,
+        job_title: Optional[str] = None,       # 👈 nuovo campo mansione
         departments: Optional[str] = None,
         active: Optional[int] = 1,
     ) -> None:
@@ -127,6 +130,7 @@ class HRService:
             ral=rl,
             email=(email or "").strip() or None,
             address=(address or "").strip() or None,
+            job_title=(job_title or "").strip() or None,   # 👈 passa al repo
             departments=(departments or "").strip() or None,
             active=act,
         )
@@ -157,7 +161,6 @@ class HRService:
         issue_date: Optional[str],
         expiry_date: Optional[str],
         notes: Optional[str],
-        # 👇 nuovo: contenuto e nome originale del file (se presente)
         file_bytes: Optional[bytes] = None,
         original_filename: Optional[str] = None,
     ) -> int:
@@ -292,7 +295,7 @@ class HRService:
         if val is not None and val < 0:
             raise ValueError(f"{field} non può essere negativo")
 
-        # ---------- File path logic ----------
+    # ---------- File path logic ----------
     def _safe_chunk(self, s: str) -> str:
         """Sanifica una parte di percorso/nome file."""
         return re.sub(r"[^A-Za-z0-9_.-]+", "_", (s or "").strip())
@@ -413,7 +416,7 @@ class HRService:
             return {"sent": False, "n_rows": len(rows), "reason": "already-sent-today"}
 
         def esc(x):
-            return (str(x) if x is not None else "").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+            return (str(x) if x is not None else "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
         header = f"""
             <h3>Certificazioni SCADUTE e in scadenza entro {days} giorni</h3>
@@ -434,12 +437,12 @@ class HRService:
         """
         body_rows = []
         for r in rows:
-            name = esc(r.get('operator_name'))
-            deps = esc(r.get('departments') or '')
-            cert = esc(r.get('cert_code'))
-            exp  = esc(r.get('expiry_date'))
+            name = esc(r.get("operator_name"))
+            deps = esc(r.get("departments") or "")
+            cert = esc(r.get("cert_code"))
+            exp = esc(r.get("expiry_date"))
             try:
-                dl = int(r.get('days_left'))
+                dl = int(r.get("days_left"))
             except Exception:
                 dl = None
 
@@ -476,7 +479,7 @@ class HRService:
         EmailSender().send_html(
             to=[recipient_email],
             subject=f"[PLAX] Report settimanale — Certificazioni SCADUTE e in scadenza ≤ {days} gg",
-            html=html
+            html=html,
         )
 
         self.repo.notification_log_insert(

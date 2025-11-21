@@ -84,6 +84,11 @@
                     <input type="text" class="form-control" name="ral" placeholder="es. 35.500,00">
                 </div>
 
+                <div class="col-md-4">
+                    <label class="form-label">Mansione</label>
+                    <input type="text" class="form-control" name="job_title" placeholder="es. Capo turno, Magazziniere">
+                </div>
+
                 <div class="col-md-3">
                     <label class="form-label">Reparti</label>
                     <input type="text" class="form-control" name="departments" placeholder="es. Stampa; Taglio">
@@ -276,32 +281,21 @@
         }
 
         // ----------------- Regole scadenza -----------------
-        /**
-         * Calcola scadenza in base al testo del tipo certificazione (certText),
-         * alla data di rilascio (issueStr, YYYY-MM-DD) e alla data di nascita (birthStr) dell’operatore.
-         * Regole:
-         *  - DIISOCIANATI → 5 anni
-         *  - VISITA MEDICA reparti: STAMPA / ACCOPPIAMENTO / TAGLIO / SALDATURA / MAGAZZINO → annuale
-         *  - VISITA MEDICA UFFICIO/UFFICI → 5 anni (2 anni se età > 50 al rilascio)
-         */
         function computeExpiry(certText, issueStr, birthStr) {
             if (!issueStr) return null;
 
             const t = (certText || '').trim().toUpperCase();
             const issue = new Date(issueStr + 'T00:00:00');
 
-            // DIISOCIANATI → 5 anni
             if (/DIISOCIANATI/.test(t)) {
                 return addYears(issue, 5);
             }
 
-            // VISITA MEDICA reparti produttivi + MAGAZZINO → annuale
             if (/VISITA[\s\S]*MEDICA/.test(t) &&
                 /(STAMPA|ACCOPPIAMENTO|TAGLIO|SALDATURA|MAGAZZINO)/.test(t)) {
                 return addYears(issue, 1);
             }
 
-            // VISITA MEDICA UFFICIO/UFFICI → 5 anni, ma biennale se >50 anni
             if (/VISITA[\s\S]*MEDICA/.test(t) && /UFFICIO(I)?/.test(t)) {
                 if (birthStr) {
                     const birth = new Date(birthStr + 'T00:00:00');
@@ -321,59 +315,47 @@
                 return addYears(issue, 5);
             }
 
-
-            // ADDETTI AI PONTEGGI → 4 anni
             if (/PONTEGGI/.test(t)) {
                 return addYears(issue, 4);
             }
 
-            // PRIMO SOCCORSO / PRIMO_SOCCORSO → 3 anni
             if (/PRIMO.*SOCCORSO/.test(t) || /PRIMO_SOCCORSO/.test(t)) {
                 return addYears(issue, 3);
             }
 
-            // ANTINCENDIO MEDIO RISCHIO / ANTINCENDIO → 5 anni
             if (/ANTINCENDIO.*MEDIO/.test(t) || /^ANTINCENDIO\b/.test(t)) {
                 return addYears(issue, 5);
             }
 
-            // RLS → 1 anno
             if (/^RLS\b/.test(t)) {
                 return addYears(issue, 1);
             }
 
-            // PREPOSTI → 5 anni
             if (/PREPOSTI/.test(t)) {
                 return addYears(issue, 5);
             }
 
-            // ADDETTI MACCHINE DI CANTIERE / CARRELLI_ELEV → 5 anni
             if (/MACCHINE.*CANTIERE/.test(t) || /CARRELLI[_ ]?ELEV/.test(t)) {
                 return addYears(issue, 5);
             }
 
-            // RSPP → 1 anno
             if (/^RSPP\b/.test(t)) {
                 return addYears(issue, 1);
             }
 
-            // COORDINATORI → 5 anni
             if (/COORDINATORI/.test(t)) {
                 return addYears(issue, 5);
             }
 
-            // Formazione sicurezza generale / specifica → 5 anni
             if (/SICUREZZA[_ ]?SPEC/.test(t) || /SICUREZZA.*SPECIFICA/.test(t)) {
                 return addYears(issue, 5);
             }
 
-            // fallback: nessuna regola → nessuna scadenza
             return null;
         }
 
         // ----------------- Load tipi certificazione -----------------
         function loadCertTypes(selectedId) {
-            // ritorna una Promise per permettere .then(...)
             return $.getJSON('/api/hr/meta/cert-types', function (list) {
                 const $sel = $('#certTypeSelect').empty().append('<option value="">Seleziona…</option>');
                 list.forEach(c => $sel.append(`<option value="${c.id}">${c.code}</option>`));
@@ -386,24 +368,21 @@
         // ----------------- Autofill scadenza -----------------
         function tryAutofillExpiry() {
             const certTypeText = $('#certTypeSelect option:selected').text() || '';
-            const operatorDepartments = $('input[name="departments"]').val() || ''; // es. "Stampa; Taglio"
+            const operatorDepartments = $('input[name="departments"]').val() || '';
 
-            // testo complessivo su cui lavorano le regex (certificato + reparti operatore)
             const certText = (certTypeText + ' ' + operatorDepartments);
 
             const issue = $('#editCertForm [name="issue_date"]').val();
-            const operatorBirth = $('input[name="birth_date"]').val(); // dall’anagrafica caricata nel form
+            const operatorBirth = $('input[name="birth_date"]').val();
             const auto = computeExpiry(certText, issue, operatorBirth);
             if (auto) {
                 const $exp = $('#editCertForm [name="expiry_date"]');
-                // sovrascrivi solo se non toccata manualmente dopo ultimo cambio tipo/rilascio
                 if (!$exp.data('touched')) {
                     $exp.val(fmtISO(auto));
                 }
             }
         }
 
-        // L’utente ha toccato manualmente la scadenza → non sovrascrivere più finché non cambia tipo/rilascio
         $('#editCertForm [name="expiry_date"]').on('input change', function () {
             $(this).data('touched', true);
         });
@@ -432,6 +411,7 @@
                 $('input[name="contract_expiry"]').val(op.contract_expiry || '');
                 $('input[name="level"]').val(op.level || '');
                 $('input[name="ral"]').val(op.ral ?? '');
+                $('input[name="job_title"]').val(op.job_title || '');   // 👈 mansione
                 $('input[name="departments"]').val(op.departments || '');
                 $('select[name="active"]').val(op.active ? '1' : '0');
             }).fail(() => alert('Errore nel caricamento anagrafica'));
@@ -442,7 +422,9 @@
             $('#saveAnagBtn').prop('disabled', true);
             $.post('/api/hr/operators/update', form)
                 .done(() => $('#saveAnagFeedback').text('Salvato ✔️').fadeIn().delay(1200).fadeOut())
-                .fail((xhr) => alert('Errore salvataggio anagrafica: ' + (xhr?.responseJSON?.detail || xhr?.responseText || '')))
+                .fail((xhr) =>
+                    alert('Errore salvataggio anagrafica: ' + (xhr?.responseJSON?.detail || xhr?.responseText || ''))
+                )
                 .always(() => $('#saveAnagBtn').prop('disabled', false));
         });
 
@@ -500,7 +482,6 @@
             loadCertTypes(r.cert_type_id).then(() => {
                 const modal = new bootstrap.Modal(document.getElementById('editCertModal'));
                 modal.show();
-                // azzera flag e ricalcola per sovrascrivere anche se c'è già una scadenza
                 $('#editCertForm [name="expiry_date"]').data('touched', false);
                 tryAutofillExpiry();
             });
@@ -518,7 +499,6 @@
             }
         });
 
-        // cambia tipo/rilascio → azzera "touched" e ricalcola
         $('#certTypeSelect').on('change', resetExpiryTouchedAndRecompute);
         $('#editCertForm [name="issue_date"]').on('change', resetExpiryTouchedAndRecompute);
 
@@ -551,7 +531,9 @@
             if (!confirm('Eliminare questa certificazione?')) return;
             $.post('/api/hr/certs/delete', { id: r.id })
                 .done(loadCerts)
-                .fail((xhr) => alert('Errore eliminazione certificazione: ' + (xhr?.responseJSON?.detail || xhr?.responseText || '')));
+                .fail((xhr) =>
+                    alert('Errore eliminazione certificazione: ' + (xhr?.responseJSON?.detail || xhr?.responseText || ''))
+                );
         });
 
         // ----------------- Init -----------------

@@ -104,6 +104,7 @@ class HRRepository:
         contract_expiry: Optional[date],
         level: Optional[str],
         ral: Optional[float],
+        job_title: Optional[str],        # 👈 nuovo campo mansione
         departments: Optional[str],
         active: Optional[int],
     ) -> int:
@@ -128,6 +129,7 @@ class HRRepository:
                 self._fmt(contract_expiry),
                 (level or None),
                 (None if ral is None else float(ral)),
+                (job_title or None),         # 👈 in posizione corretta
                 (None if active is None else int(active)),
             ]
             db.execute_query(sql_ins, params, query_type=QueryType.INSERT)
@@ -165,6 +167,7 @@ class HRRepository:
         ral: Optional[float],
         email: Optional[str],
         address: Optional[str],
+        job_title: Optional[str],        # 👈 nuovo campo mansione
         departments: Optional[str],
         active: Optional[int],
     ) -> None:
@@ -186,6 +189,7 @@ class HRRepository:
                 (None if ral is None else float(ral)),
                 (email or None),
                 (address or None),
+                (job_title or None),          # 👈 in posizione corretta
                 (None if active is None else int(active)),
                 int(id),
             ]
@@ -278,7 +282,7 @@ class HRRepository:
         issue_date: Optional[date],
         expiry_date: Optional[date],
         notes: Optional[str],
-        file_path: Optional[str] = None,  # 👈 NOVITÀ
+        file_path: Optional[str] = None,
     ) -> int:
         # ON DUPLICATE KEY su (operator_id, cert_type_id)
         sql = QuerySqlHRMYSQL.upsert_certification_sql()
@@ -289,7 +293,7 @@ class HRRepository:
             self._fmt(issue_date),
             self._fmt(expiry_date),
             notes,
-            file_path,  # 👈 NOVITÀ
+            file_path,
         )
         with self.db_manager as db:
             db.execute_query(sql, params, query_type=QueryType.INSERT)
@@ -327,7 +331,9 @@ class HRRepository:
         Verifica se una notifica identica (stesso payload) è già stata inviata oggi
         a 'sent_to' per l'evento indicato.
         """
-        payload_hash = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+        payload_hash = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
         sql = """
             SELECT 1
             FROM notification_log
@@ -346,7 +352,9 @@ class HRRepository:
         """
         Inserisce un record di notifica inviata per evitare reinvii identici nella stessa giornata.
         """
-        payload_hash = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+        payload_hash = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
         sql = """
             INSERT INTO notification_log (event_code, ref_date, sent_to, payload_hash)
             VALUES (%s, %s, %s, %s)
@@ -370,5 +378,10 @@ class HRRepository:
             LIMIT 1
         """
         with self.db_manager as db:
-            row = db.execute_query(sql, [event_code, sent_to, int(days_window - 1)], fetchall=False, query_type=QueryType.GET)
+            row = db.execute_query(
+                sql,
+                [event_code, sent_to, int(days_window - 1)],
+                fetchall=False,
+                query_type=QueryType.GET,
+            )
         return bool(row)

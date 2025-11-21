@@ -883,3 +883,21 @@ ALTER TABLE company_documents
 SET SQL_SAFE_UPDATES = @OLD_SQL_SAFE_UPDATES;
 
 -- 
+
+
+-- job_title (mansione descrittiva)
+SET @sql := (
+  SELECT IF(
+    EXISTS(
+      SELECT 1
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'operators'
+        AND COLUMN_NAME = 'job_title'
+    ),
+    'SELECT 1',
+    'ALTER TABLE operators
+       ADD COLUMN job_title VARCHAR(120) NULL COMMENT ''Mansione descrittiva'''
+  )
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;

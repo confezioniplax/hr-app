@@ -1,11 +1,15 @@
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, Depends, Form, File, UploadFile
-from fastapi.responses import JSONResponse, FileResponse
 from pathlib import Path
+import io
+
+from fastapi import APIRouter, HTTPException, Query, Depends, Form, File, UploadFile
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from openpyxl import Workbook
 
 from app.dependencies import TokenData, get_current_manager
 from app.services.HRService import HRService
 from app.services.CompanyDocsService import CompanyDocsService  # nuovo service
+
 
 hr_api_router = APIRouter(prefix="/api", tags=["hr-api"])
 
@@ -43,6 +47,99 @@ async def hr_list_operators_light(
         raise HTTPException(status_code=500, detail=f"Error listing operators: {str(e)}")
 
 
+# -------- EXPORT EXCEL ANAGRAFICA --------
+@hr_api_router.get("/hr/operators/export")
+async def hr_export_operators_excel(
+    q: Optional[str] = Query(default=None),
+    department_id: Optional[int] = Query(default=None),
+    active: Optional[int] = Query(default=None),
+    service: HRService = Depends(HRService),
+    current_user: TokenData = Depends(get_current_manager),
+):
+    """
+    Esporta in Excel la lista operatori (tutti i campi principali),
+    applicando gli stessi filtri di /hr/operators/list.
+    """
+    try:
+        rows = service.list_operator_core(q=q, department_id=department_id, active=active)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Operatori"
+
+        headers = [
+            "ID",
+            "Nome",
+            "Cognome",
+            "Mansione",
+            "Reparti",
+            "Telefono",
+            "Email",
+            "CF",
+            "Data nascita",
+            "Cittadinanza",
+            "Titolo di studio",
+            "Assunzione",
+            "Tipo contratto",
+            "Scadenza contratto",
+            "Livello",
+            "RAL",
+            "Residenza",
+            "Attivo",
+        ]
+        ws.append(headers)
+
+        for r in rows:
+            # prova a prendere first_name / last_name se esistono
+            first_name = (r.get("first_name") or "").strip()
+            last_name = (r.get("last_name") or "").strip()
+
+            # se non ci sono, prova a spacchettare operator_name (es. "Rossi Mario")
+            if not first_name and not last_name:
+                op_name = (r.get("operator_name") or "").strip()
+                if op_name:
+                    parts = op_name.split(" ", 1)
+                    if len(parts) == 2:
+                        last_name, first_name = parts[0].strip(), parts[1].strip()
+                    else:
+                        # fallback best effort: tutto nel cognome
+                        last_name = op_name
+
+            ws.append([
+                r.get("id"),
+                first_name,
+                last_name,
+                r.get("job_title") or "",
+                r.get("departments") or "",
+                r.get("phone") or "",
+                r.get("email") or "",
+                r.get("fiscal_code") or "",
+                r.get("birth_date") or "",
+                r.get("citizenship") or "",
+                r.get("education_level") or "",
+                r.get("hire_date") or "",
+                r.get("contract_type") or "",
+                r.get("contract_expiry") or "",
+                r.get("level") or "",
+                r.get("ral") or "",
+                r.get("address") or "",
+                1 if r.get("active") else 0,
+            ])
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        filename = "operatori_hr.xlsx"
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error exporting operators: {str(e)}")
+
+
 @hr_api_router.get("/hr/operators/{op_id}")
 async def hr_get_operator(
     op_id: int,
@@ -77,6 +174,7 @@ async def hr_create_operator(
     contract_expiry: Optional[str] = Form(default=None),
     level: Optional[str] = Form(default=None),
     ral: Optional[str] = Form(default=None),
+    job_title: Optional[str] = Form(default=None),   # mansione
     departments: Optional[str] = Form(default=None),
     active: Optional[int] = Form(default=1),
     service: HRService = Depends(HRService),
@@ -98,6 +196,7 @@ async def hr_create_operator(
             contract_expiry=contract_expiry,
             level=level,
             ral=ral,
+            job_title=job_title,
             departments=departments,
             active=active,
         )
@@ -123,6 +222,7 @@ async def hr_update_operator(
     ral: Optional[str] = Form(default=None),
     email: Optional[str] = Form(default=None),
     address: Optional[str] = Form(default=None),
+    job_title: Optional[str] = Form(default=None),   # mansione
     departments: Optional[str] = Form(default=None),
     active: Optional[int] = Form(default=1),
     service: HRService = Depends(HRService),
@@ -145,6 +245,7 @@ async def hr_update_operator(
             ral=ral,
             email=email,
             address=address,
+            job_title=job_title,
             departments=departments,
             active=active,
         )
@@ -344,7 +445,7 @@ async def company_docs_list(
     q: Optional[str] = Query(default=None),
     year: Optional[str] = Query(default=None),        # accetta stringhe vuote
     frequency: Optional[str] = Query(default=None),   # può arrivare "" senza errori
-    category: Optional[str] = Query(default=None),    # 👈 CODE categoria (es. 'ORG', 'DVR', 'ALTRO')
+    category: Optional[str] = Query(default=None),    # code categoria (es. 'ORG', 'DVR', 'ALTRO')
     service: CompanyDocsService = Depends(CompanyDocsService),
     current_user: TokenData = Depends(get_current_manager),
 ):
@@ -390,7 +491,7 @@ async def company_docs_upsert(
     id: Optional[int] = Form(default=None),
     title: str = Form(...),
     year: int = Form(...),
-    # 👇 IMPORTANTE: category ora è IL CODE (es. 'ORG','DVR','SORV_SAN','ALTRO')
+    # category è il CODE (es. 'ORG','DVR','SORV_SAN','ALTRO')
     category: str = Form("ALTRO"),
     frequency: str = Form("annuale"),
     notes: Optional[str] = Form(default=None),
@@ -411,7 +512,7 @@ async def company_docs_upsert(
             id=id,
             title=title,
             year=year,
-            category=category,  # code
+            category=category,
             frequency=frequency,
             notes=notes,
             file_bytes=file_bytes,
