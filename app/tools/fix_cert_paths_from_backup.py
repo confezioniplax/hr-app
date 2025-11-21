@@ -35,7 +35,7 @@ def main():
 
     # Base path: es. C:/PlaxData/CertificazioniDipendenti
     base_root = Path(settings.CERTS_BASE_DIR)
-    cert_root = base_root / "CertificazioniDipendenti"
+    cert_root = base_root / "Certificazioni"
 
     print(f"[INFO] CERTS_BASE_DIR: {base_root}")
     print(f"[INFO] Uso root certificazioni: {cert_root}")
