@@ -740,6 +740,26 @@ ON DUPLICATE KEY UPDATE
   active = VALUES(active),
   sort_order = VALUES(sort_order);
 
+INSERT INTO archivio.company_doc_categories (code, label, active, sort_order) VALUES
+  ('LEG', 'LEGALE', 1, 170)
+ON DUPLICATE KEY UPDATE
+  label = VALUES(label),
+  active = VALUES(active),
+  sort_order = VALUES(sort_order);
+
+  INSERT INTO archivio.company_doc_categories (code, label, active, sort_order) VALUES
+  ('ASS', 'ASSICURAZIONI', 1, 180)
+ON DUPLICATE KEY UPDATE
+  label = VALUES(label),
+  active = VALUES(active),
+  sort_order = VALUES(sort_order);
+
+INSERT INTO archivio.company_doc_categories (code, label, active, sort_order) VALUES
+  ('QUAL', 'QUALIA', 1, 190)
+ON DUPLICATE KEY UPDATE
+  label = VALUES(label),
+  active = VALUES(active),
+  sort_order = VALUES(sort_order);
 
 -- ==========================================================
 -- 2) Normalizzazione valori già presenti in company_documents.category
@@ -824,6 +844,16 @@ WHERE category IN (
   'EMERGENZA',
   'GESTIONE EMERGENZE',
   'PIANO EMERGENZA'
+);
+
+-- SORVEGLIANZA SANITARIA
+UPDATE company_documents
+SET category = 'SORV_SAN'
+WHERE category IN (
+  'SORVEGLIANZA SANITARIA',
+  'SORV_SAN',
+  'VISITE MEDICHE',
+  'SANITARIA'
 );
 
 -- SORVEGLIANZA SANITARIA

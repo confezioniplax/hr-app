@@ -16,25 +16,22 @@
             <button class="btn btn-outline-primary" id="exportExcelBtn">
                 Export Anagrafica
             </button>
-            <!-- <a href="/home-operators" class="btn btn-outline-secondary">← Torna alla Home</a> -->
-        
+
             <button type="button" id="btnExportCerts" class="btn btn-outline-success">
                 <i class="bi bi-file-earmark-excel"></i> Export Scadenze
             </button>
         </div>
-
-
     </div>
 
     <!-- FILTRI -->
     <form id="anagFilterForm" class="mb-3">
         <div class="row g-2">
-            <div class="col-12 col-md-5">
+            <div class="col-12 col-md-4">
                 <label class="form-label">Cerca (nome/cognome/CF)</label>
                 <input type="text" class="form-control" name="q" value="{{ q or '' }}"
                     placeholder="es. Rossi Mario, RSSMRA...">
             </div>
-            <div class="col-12 col-md-4">
+            <div class="col-12 col-md-3">
                 <label class="form-label">Reparto</label>
                 <select class="form-select" name="department_id" id="filterDeptAnag">
                     <option value="">Tutti…</option>
@@ -46,12 +43,11 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-12 col-md-2">
-                <label class="form-label">Attivo</label>
-                <select class="form-select" name="active">
-                    <option value="">Tutti</option>
-                    <option value="1" {% if active=='1' %}selected{% endif %}>Sì</option>
-                    <option value="0" {% if active=='0' %}selected{% endif %}>No</option>
+            <!-- SOSTITUZIONE "ATTIVO" → "TIPO CERTIFICAZIONE" -->
+            <div class="col-12 col-md-4">
+                <label class="form-label">Filtra certificazione non presente o scaduta</label>
+                <select class="form-select" id="filterCertType">
+                    <option value="">Tutte…</option>
                 </select>
             </div>
             <div class="col-12 col-md-1 d-flex align-items-end">
@@ -191,14 +187,28 @@
         // opzionale: se il server pre-renderizza dati
         const operatorsData = {{ (operators_data | default ([])) | tojson | safe }};
 
-    function buildAnagParams() {
+    // --- POPOLA TIPO CERTIFICAZIONE ---
+    function loadCertTypeFilter() {
+        $.getJSON('/api/hr/meta/cert-types', function (list) {
+            const $sel = $('#filterCertType').empty();
+            $sel.append('<option value="">Tutte…</option>');
+            (list || []).forEach(c => {
+                const label = c.description ? (c.code + ' — ' + c.description) : c.code;
+                $sel.append('<option value="' + c.id + '">' + label + '</option>');
+            });
+        }).fail(function (xhr) {
+            console.error('Errore /api/hr/meta/cert-types', xhr?.responseText || xhr);
+            alert('Errore nel caricamento dei tipi di certificazione');
+        });
+    }
+
+    // --- PARAMETRI BASE ANAGRAFICA (q + reparto) ---
+    function buildBaseParams() {
         const q = $('input[name="q"]').val().trim();
         const dep = $('#filterDeptAnag').val();
-        const act = $('select[name="active"]').val();
         const p = {};
         if (q) p.q = q;
         if (dep && dep !== '') p.department_id = Number(dep);
-        if (act === '0' || act === '1') p.active = Number(act);
         return p;
     }
 
@@ -237,20 +247,66 @@
         pageLength: 25
     });
 
+    // --- SUBMIT FILTRO "MOSTRA" ---
     $('#anagFilterForm').on('submit', function (e) {
         e.preventDefault();
-        $.getJSON('/api/hr/operators/list', buildAnagParams(), function (list) {
-            opTable.clear().rows.add(list).draw();
+
+        const baseParams = buildBaseParams();
+        const certTypeId = $('#filterCertType').val();
+
+        // Caso 1: nessun tipo certificazione selezionato → normale lista operatori
+        if (!certTypeId) {
+            $.getJSON('/api/hr/operators/list', baseParams, function (list) {
+                opTable.clear().rows.add(list).draw();
+            }).fail(xhr => {
+                console.error('Errore /api/hr/operators/list', xhr?.responseText || xhr);
+                alert('Errore nel caricamento della lista operatori');
+            });
+            return;
+        }
+
+        // Caso 2: filtro per tipo certificazione:
+        // vogliamo SOLO operatori con quella cert MANCA o SCADUTA.
+        const certParams = {
+            cert_type_id: Number(certTypeId)
+        };
+        // se hai filtrato per reparto, lo riutilizziamo anche qui
+        if (baseParams.department_id) {
+            certParams.department_id = baseParams.department_id;
+        }
+
+        // 1) Prendiamo lo stato certificazioni per quel tipo
+        $.getJSON('/api/hr/certs/status', certParams, function (certList) {
+            const targetIds = new Set(
+                (certList || [])
+                    .filter(r => r.status_calc === 'MANCA' || r.status_calc === 'SCADUTA')
+                    .map(r => r.operator_id)
+            );
+
+            // Nessuno in MANCA/SCADUTA → svuotiamo tabella e basta
+            if (targetIds.size === 0) {
+                opTable.clear().draw();
+                return;
+            }
+
+            // 2) Prendiamo l’anagrafica base
+            $.getJSON('/api/hr/operators/list', baseParams, function (opList) {
+                const filteredOps = (opList || []).filter(o => targetIds.has(o.id));
+                opTable.clear().rows.add(filteredOps).draw();
+            }).fail(xhr => {
+                console.error('Errore /api/hr/operators/list (con filtro cert)', xhr?.responseText || xhr);
+                alert('Errore nel caricamento della lista operatori (filtro certificazione)');
+            });
+
         }).fail(xhr => {
-            console.error('Errore /api/hr/operators/list', xhr?.responseText || xhr);
-            alert('Errore nel caricamento della lista operatori');
+            console.error('Errore /api/hr/certs/status', xhr?.responseText || xhr);
+            alert('Errore nel caricamento dello stato certificazioni');
         });
     });
 
+    // Se non hai dati pre-renderizzati, carica all’avvio come "Mostra"
     if (!Array.isArray(operatorsData) || operatorsData.length === 0) {
-        $.getJSON('/api/hr/operators/list', buildAnagParams(), function (list) {
-            opTable.clear().rows.add(list).draw();
-        });
+        $('#anagFilterForm').trigger('submit');
     }
 
     // Crea nuovo operatore → POST /api/hr/operators/create → redirect al dettaglio
@@ -263,7 +319,7 @@
                 if (id) {
                     window.location.href = `/hr/operators/${id}`;
                 } else {
-                    alert('Operatore creato ma non ho ricevuto l’ID.');
+                    alert("Operatore creato ma non ho ricevuto l'ID.");
                     $('#newOpModal').modal('hide');
                     $('#anagFilterForm').trigger('submit');
                 }
@@ -274,20 +330,28 @@
             .always(() => $('#createOpBtn').prop('disabled', false));
     });
 
-    // EXPORT EXCEL: usa gli stessi filtri della lista
+    // EXPORT EXCEL ANAGRAFICA: usa solo filtri anagrafici (q + reparto)
     $('#exportExcelBtn').on('click', function () {
-        const params = buildAnagParams();
+        const params = buildBaseParams();
         const query = $.param(params);
         const url = '/api/hr/operators/export' + (query ? '?' + query : '');
         window.location.href = url;
     });
 
-    // --- EXPORT CERTIFICAZIONI CARICATE ---
-        document.getElementById('btnExportCerts').addEventListener('click', function () {
-            // versione semplice: export globale senza filtri
-            window.location.href = '/api/hr/certs/export-operator-certs';
-        });
+    // EXPORT SCADENZE CERTIFICAZIONI: passa anche il tipo selezionato (se vuoi usarlo lato backend)
+    $('#btnExportCerts').on('click', function () {
+        const params = buildBaseParams();
+        const certTypeId = $('#filterCertType').val();
+        if (certTypeId) {
+            params.cert_type_id = Number(certTypeId);
+        }
+        const query = $.param(params);
+        const url = '/api/hr/certs/export-operator-certs' + (query ? '?' + query : '');
+        window.location.href = url;
+    });
 
+    // init filtro tipi certificazione
+    loadCertTypeFilter();
     });
 </script>
 {% endblock %}
