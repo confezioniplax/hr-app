@@ -133,7 +133,11 @@ class HRRepository:
                 (None if active is None else int(active)),
             ]
             db.execute_query(sql_ins, params, query_type=QueryType.INSERT)
-            row = db.execute_query(QuerySqlHRMYSQL.last_insert_id_sql(), fetchall=False, query_type=QueryType.GET)
+            row = db.execute_query(
+                QuerySqlHRMYSQL.last_insert_id_sql(),
+                fetchall=False,
+                query_type=QueryType.GET,
+            )
             new_id = int(row["id"]) if row else 0
 
             # opzionale: reparti passati come stringa "REP1; REP2"
@@ -269,13 +273,18 @@ class HRRepository:
             LIMIT 1
         """
         with self.db_manager as db:
-            row = db.execute_query(sql, [operator_id, cert_type_id], fetchall=False, query_type=QueryType.GET)
+            row = db.execute_query(
+                sql,
+                [operator_id, cert_type_id],
+                fetchall=False,
+                query_type=QueryType.GET,
+            )
             return row if row else None
 
     def upsert_certification(
         self,
         *,
-        id: Optional[int],
+        id: Optional[int],  # non usato: interfaccia compatibile, ON DUPLICATE KEY gestito dalla query
         operator_id: int,
         cert_type_id: int,
         status: str,
@@ -297,7 +306,11 @@ class HRRepository:
         )
         with self.db_manager as db:
             db.execute_query(sql, params, query_type=QueryType.INSERT)
-            row = db.execute_query(QuerySqlHRMYSQL.last_insert_id_sql(), fetchall=False, query_type=QueryType.GET)
+            row = db.execute_query(
+                QuerySqlHRMYSQL.last_insert_id_sql(),
+                fetchall=False,
+                query_type=QueryType.GET,
+            )
             return int(row["id"]) if row else 0
 
     def delete_certification(self, cert_id: int) -> None:
@@ -385,3 +398,16 @@ class HRRepository:
                 query_type=QueryType.GET,
             )
         return bool(row)
+
+    # =====================================================
+    # EXPORT
+    # =====================================================
+    def export_operator_certs(self) -> List[Dict[str, Any]]:
+        """
+        Ritorna tutte le certificazioni effettivamente presenti per operatori attivi,
+        pronte per essere trasformate in CSV/Excel.
+        """
+        sql = QuerySqlHRMYSQL.export_operator_certs_sql()
+        with self.db_manager as db:
+            rows = db.execute_query(sql, [], query_type=QueryType.GET)
+        return rows

@@ -14,10 +14,16 @@
             </button>
             <!-- NUOVO: export Excel -->
             <button class="btn btn-outline-primary" id="exportExcelBtn">
-                Export Excel
+                Export Anagrafica
             </button>
             <!-- <a href="/home-operators" class="btn btn-outline-secondary">← Torna alla Home</a> -->
+        
+            <button type="button" id="btnExportCerts" class="btn btn-outline-success">
+                <i class="bi bi-file-earmark-excel"></i> Export Scadenze
+            </button>
         </div>
+
+
     </div>
 
     <!-- FILTRI -->
@@ -275,6 +281,12 @@
         const url = '/api/hr/operators/export' + (query ? '?' + query : '');
         window.location.href = url;
     });
+
+    // --- EXPORT CERTIFICAZIONI CARICATE ---
+        document.getElementById('btnExportCerts').addEventListener('click', function () {
+            // versione semplice: export globale senza filtri
+            window.location.href = '/api/hr/certs/export-operator-certs';
+        });
 
     });
 </script>

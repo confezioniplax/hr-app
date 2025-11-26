@@ -1,7 +1,8 @@
 from typing import Optional
 from pathlib import Path
 import io
-
+import csv
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Depends, Form, File, UploadFile
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from openpyxl import Workbook
@@ -581,3 +582,75 @@ async def company_docs_delete(
         return JSONResponse(status_code=200, content={"message": "Document deleted"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting company document: {str(e)}")
+
+
+@hr_api_router.get("/hr/certs/export-operator-certs")
+async def hr_export_operator_certs(
+    service: HRService = Depends(HRService),
+    current_user: TokenData = Depends(get_current_manager),
+):
+    """
+    Esporta tutte le certificazioni CARICATE (esclude MANCA) per operatori attivi
+    in formato CSV (apribile in Excel).
+    Una riga per combinazione (operatore, certificazione).
+    """
+    rows = service.export_operator_certs()
+
+    # Prepara CSV in memoria
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";", lineterminator="\n")
+
+    writer.writerow([
+    "Operator ID",
+    "Cognome",
+    "Nome",
+    "CF",
+    "Mansione",
+    "Reparti",
+    "Codice certificazione",
+    "Descrizione certificazione",
+    "Data rilascio",
+    "Data scadenza",
+    "Note"
+])
+
+
+    def _fmt_date(val):
+        if not val:
+            return ""
+        # jsonable_encoder ti avrà dato stringhe "YYYY-MM-DD" o simili
+        return str(val)
+
+    def _fmt_decimal(val):
+        if val is None:
+            return ""
+        # tienilo come numero "grezzo", Excel se lo mangia
+        return str(val)
+
+    for r in rows:
+        writer.writerow([
+            r.get("operator_id") or "",
+            r.get("last_name") or "",
+            r.get("first_name") or "",
+            r.get("fiscal_code") or "",
+            r.get("job_title") or "",
+            r.get("departments") or "",
+            r.get("cert_code") or "",
+            r.get("cert_description") or "",
+            _fmt_date(r.get("issue_date")),
+            _fmt_date(r.get("expiry_date")),
+            r.get("notes") or "",
+        ])
+
+
+    csv_bytes = output.getvalue().encode("utf-8-sig")  # BOM per Excel felice
+    output.close()
+
+    filename = f"certificazioni_operatori_{datetime.now().strftime('%Y%m%d')}.csv"
+    return StreamingResponse(
+        io.BytesIO(csv_bytes),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
+    )

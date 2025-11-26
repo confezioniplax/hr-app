@@ -17,7 +17,7 @@ class CompanyDocsRepository:
         q: Optional[str],
         year: Optional[int],
         frequency: Optional[str],
-        category_code: Optional[str] = None,  # 👈 nuovo filtro, opzionale
+        category_code: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Restituisce la lista dei documenti aziendali con eventuali filtri:

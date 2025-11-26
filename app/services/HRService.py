@@ -486,3 +486,9 @@ class HRService:
             event_code=event_code, ref_date=today, sent_to=recipient_email, payload=rows
         )
         return {"sent": True, "n_rows": len(rows), "reason": "ok"}
+
+
+    # -------- EXPORT CERTIFICAZIONI (per Excel) --------
+    def export_operator_certs(self) -> List[Dict[str, Any]]:
+        rows = self.repo.export_operator_certs()
+        return self._encode(rows)

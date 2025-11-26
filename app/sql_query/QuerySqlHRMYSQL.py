@@ -286,3 +286,47 @@ ON DUPLICATE KEY UPDATE
               operator_name ASC,
               cert_code ASC
         """
+
+    @staticmethod
+    def export_operator_certs_sql() -> str:
+        """
+        Export per Excel:
+        - solo operatori attivi
+        - solo certificazioni effettivamente caricate
+        - non include MANCA
+        - include job_title
+        - elimina hire_date, contract_type, contract_expiry, level, ral
+        """
+        return """
+            SELECT
+                o.id AS operator_id,
+                o.last_name,
+                o.first_name,
+                o.fiscal_code,
+                o.job_title,
+                dep.departments,
+                t.code AS cert_code,
+                t.description AS cert_description,
+                oc.issue_date,
+                oc.expiry_date,
+                oc.notes
+            FROM operators o
+            LEFT JOIN (
+                SELECT od.operator_id,
+                    GROUP_CONCAT(DISTINCT d.name ORDER BY d.name SEPARATOR ', ') AS departments
+                FROM operator_departments od
+                JOIN departments d ON d.id = od.department_id
+                GROUP BY od.operator_id
+            ) dep ON dep.operator_id = o.id
+            INNER JOIN operator_certifications oc
+                ON oc.operator_id = o.id
+            INNER JOIN operator_cert_types t
+                ON t.id = oc.cert_type_id
+            WHERE o.active = 1
+            AND oc.status <> 'MANCA'
+            ORDER BY
+                o.last_name, o.first_name,
+                t.code,
+                oc.expiry_date IS NULL,
+                oc.expiry_date ASC
+        """
