@@ -590,45 +590,33 @@ async def hr_export_operator_certs(
     current_user: TokenData = Depends(get_current_manager),
 ):
     """
-    Esporta tutte le certificazioni CARICATE (esclude MANCA) per operatori attivi
-    in formato CSV (apribile in Excel).
+    Esporta tutte le certificazioni CARICATE per operatori attivi
+    in formato Excel (.xlsx).
     Una riga per combinazione (operatore, certificazione).
     """
     rows = service.export_operator_certs()
 
-    # Prepara CSV in memoria
-    output = io.StringIO()
-    writer = csv.writer(output, delimiter=";", lineterminator="\n")
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Certificazioni"
 
-    writer.writerow([
-    "Operator ID",
-    "Cognome",
-    "Nome",
-    "CF",
-    "Mansione",
-    "Reparti",
-    "Codice certificazione",
-    "Descrizione certificazione",
-    "Data rilascio",
-    "Data scadenza",
-    "Note"
-])
-
-
-    def _fmt_date(val):
-        if not val:
-            return ""
-        # jsonable_encoder ti avrà dato stringhe "YYYY-MM-DD" o simili
-        return str(val)
-
-    def _fmt_decimal(val):
-        if val is None:
-            return ""
-        # tienilo come numero "grezzo", Excel se lo mangia
-        return str(val)
+    headers = [
+        "Operator ID",
+        "Cognome",
+        "Nome",
+        "CF",
+        "Mansione",
+        "Reparti",
+        "Codice certificazione",
+        "Descrizione certificazione",
+        "Data rilascio",
+        "Data scadenza",
+        "Note"
+    ]
+    ws.append(headers)
 
     for r in rows:
-        writer.writerow([
+        ws.append([
             r.get("operator_id") or "",
             r.get("last_name") or "",
             r.get("first_name") or "",
@@ -637,19 +625,20 @@ async def hr_export_operator_certs(
             r.get("departments") or "",
             r.get("cert_code") or "",
             r.get("cert_description") or "",
-            _fmt_date(r.get("issue_date")),
-            _fmt_date(r.get("expiry_date")),
+            r.get("issue_date") or "",
+            r.get("expiry_date") or "",
             r.get("notes") or "",
         ])
 
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
 
-    csv_bytes = output.getvalue().encode("utf-8-sig")  # BOM per Excel felice
-    output.close()
+    filename = f"certificazioni_operatori_{datetime.now().strftime('%Y%m%d')}.xlsx"
 
-    filename = f"certificazioni_operatori_{datetime.now().strftime('%Y%m%d')}.csv"
     return StreamingResponse(
-        io.BytesIO(csv_bytes),
-        media_type="text/csv",
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"'
         },

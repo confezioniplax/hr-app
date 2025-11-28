@@ -755,7 +755,7 @@ ON DUPLICATE KEY UPDATE
   sort_order = VALUES(sort_order);
 
 INSERT INTO archivio.company_doc_categories (code, label, active, sort_order) VALUES
-  ('QUAL', 'QUALIA', 1, 190)
+  ('QUAL', 'QUALITA', 1, 190)
 ON DUPLICATE KEY UPDATE
   label = VALUES(label),
   active = VALUES(active),
