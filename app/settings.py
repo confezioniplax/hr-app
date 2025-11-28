@@ -26,6 +26,8 @@ class Settings(BaseSettings):
 
     # === File Path ===
     CERTS_BASE_DIR: str = Field(..., validation_alias="CERTS_BASE_DIR")
+    
+    GROQ_API_KEY: str = Field(..., validation_alias="GROQ_API_KEY")
 
     model_config = SettingsConfigDict(env_file=".env")
 

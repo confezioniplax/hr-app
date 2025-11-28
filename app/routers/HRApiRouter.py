@@ -504,6 +504,42 @@ async def company_docs_categories(
         raise HTTPException(status_code=500, detail=f"Error listing company document categories: {str(e)}")
 
 
+# -------- AI: SUGGERIMENTO METADATI DOCUMENTO --------
+@hr_api_router.post("/company-docs/suggest-metadata")
+async def company_docs_suggest_metadata(
+    title: str = Form(...),
+    attachment: UploadFile = File(...),
+    service: CompanyDocsService = Depends(CompanyDocsService),
+    current_user: TokenData = Depends(get_current_manager),
+):
+    """
+    Usa l'AI (via Groq) per suggerire:
+    - category (code)
+    - frequency
+    - year
+
+    NON salva nulla nel DB, serve solo per pre-compilare la modale nel frontend.
+    """
+    try:
+        if not attachment or not attachment.filename:
+            raise HTTPException(status_code=400, detail="File allegato mancante")
+
+        file_bytes = await attachment.read()
+        if not file_bytes:
+            raise HTTPException(status_code=400, detail="File vuoto")
+
+        data = service.suggest_metadata_from_file(
+            title=title,
+            file_bytes=file_bytes,
+            original_filename=attachment.filename,
+        )
+        return JSONResponse(status_code=200, content=data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error suggesting metadata: {str(e)}")
+
+
 @hr_api_router.post("/company-docs/upsert")
 async def company_docs_upsert(
     id: Optional[int] = Form(default=None),

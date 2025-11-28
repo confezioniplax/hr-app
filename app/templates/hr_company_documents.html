@@ -27,14 +27,14 @@
                     <label class="form-label">Frequenza</label>
                     <select class="form-select" id="frequency">
                         <option value="">Tutte</option>
-                            <option value="annuale" selected>Annuale</option>
-                            <option value="semestrale">Semestrale</option>
-                            <option value="biennale">Biennale</option>
-                            <option value="triennale">Triennale</option>
-                            <option value="quadriennale">Quadriennale</option>
-                            <option value="quinquennale">Quinquennale</option>
-                            <option value="una_tantum">Una tantum</option>
-                            <option value="variabile">Variabile</option>
+                        <option value="annuale" selected>Annuale</option>
+                        <option value="semestrale">Semestrale</option>
+                        <option value="biennale">Biennale</option>
+                        <option value="triennale">Triennale</option>
+                        <option value="quadriennale">Quadriennale</option>
+                        <option value="quinquennale">Quinquennale</option>
+                        <option value="una_tantum">Una tantum</option>
+                        <option value="variabile">Variabile</option>
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -89,20 +89,37 @@
                     <input type="hidden" name="id" id="docId">
 
                     <div class="row g-3">
+                        <!-- 1: TITOLO -->
                         <div class="col-md-8">
                             <label class="form-label">Titolo</label>
                             <input type="text" class="form-control" name="title" id="title" required
-                                placeholder="Es. Verbale riunione periodica art. 35">
+                                placeholder="Es. Nomina addetti primo soccorso">
                         </div>
+
+                        <!-- 2: ANNO (disabilitato finché non ho suggerimenti in creazione) -->
                         <div class="col-md-4">
                             <label class="form-label">Anno</label>
                             <input type="number" class="form-control" name="year" id="yearInput" min="2000" max="2100"
-                                required>
+                                required disabled>
                         </div>
 
+                        <!-- 3: FILE SUBITO DOPO TITOLO -->
+                        <div class="col-md-12">
+                            <label class="form-label">
+                                Allegato (PDF/Immagine/Doc)
+                            </label>
+                            <input class="form-control" type="file" name="attachment" id="attachment"
+                                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
+                            <div id="currentFileHelp" class="form-text"></div>
+                            <div id="suggestStatus" class="form-text text-muted">
+                                Inserisci titolo e scegli un file per ottenere i suggerimenti.
+                            </div>
+                        </div>
+
+                        <!-- 4: CATEGORIA / FREQUENZA (inizialmente disabled su nuovo) -->
                         <div class="col-md-4">
                             <label class="form-label">Categoria</label>
-                            <select class="form-select" name="category" id="category">
+                            <select class="form-select" name="category" id="category" disabled>
                                 {% for c in categories or [] %}
                                 <option value="{{ c.code }}" {% if loop.first %}selected{% endif %}>
                                     {{ c.label }}
@@ -113,7 +130,7 @@
 
                         <div class="col-md-4">
                             <label class="form-label">Frequenza</label>
-                            <select class="form-select" name="frequency" id="frequencyInput">
+                            <select class="form-select" name="frequency" id="frequencyInput" disabled>
                                 <option value="annuale" selected>Annuale</option>
                                 <option value="semestrale">Semestrale</option>
                                 <option value="biennale">Biennale</option>
@@ -125,19 +142,10 @@
                             </select>
                         </div>
 
+                        <!-- 5: NOTE (facoltative ma disabilitate finché non arriva sugg.) -->
                         <div class="col-md-12">
                             <label class="form-label">Note</label>
-                            <input type="text" class="form-control" name="notes" id="notes" maxlength="255">
-                        </div>
-
-                        <div class="col-md-12">
-                            <label class="form-label">
-                                Allegato (PDF/Immagine/Doc)
-                                <small class="text-muted">(opzionale in modifica)</small>
-                            </label>
-                            <input class="form-control" type="file" name="attachment" id="attachment"
-                                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
-                            <div id="currentFileHelp" class="form-text"></div>
+                            <input type="text" class="form-control" name="notes" id="notes" maxlength="255" disabled>
                         </div>
                     </div>
                 </form>
@@ -167,12 +175,29 @@
             return parts[parts.length - 1] || path;
         }
 
+        function setFormFieldsEnabled(enabled) {
+            $('#yearInput').prop('disabled', !enabled);
+            $('#category').prop('disabled', !enabled);
+            $('#frequencyInput').prop('disabled', !enabled);
+            $('#notes').prop('disabled', !enabled);
+        }
+
+        function resetForm() {
+            $('#docForm')[0].reset();
+            $('#docId').val('');
+            $('#currentFileHelp').text('');
+            $('#suggestStatus').text('Inserisci titolo e scegli un file per ottenere i suggerimenti.');
+            $('#attachment').val('');
+            // su NUOVO documento i campi vengono bloccati in attesa suggerimenti
+            setFormFieldsEnabled(false);
+        }
+
         function loadDocs() {
             const params = {
                 q: $('#q').val() || null,
                 year: $('#year').val() || null,
                 frequency: $('#frequency').val() || null,
-                category: $('#categoryFilter').val() || null   // 👈 filtro per code
+                category: $('#categoryFilter').val() || null
             };
             $.getJSON('/api/company-docs/list', params, function (list) {
                 const $tb = $('#docsTable tbody').empty();
@@ -200,19 +225,8 @@
             });
         }
 
-        function resetForm() {
-            $('#docForm')[0].reset();
-            $('#docId').val('');
-            $('#currentFileHelp').text('');
-            $('#attachment').val('');
-        }
-
         function openModalForNew() {
             resetForm();
-            // default anno = anno corrente
-            const now = new Date();
-            $('#yearInput').val(now.getFullYear());
-            // categoria di default = prima option (già selezionata da Jinja)
             const modal = getDocModalInstance();
             modal.show();
         }
@@ -222,15 +236,68 @@
             $('#docId').val(row.id || '');
             $('#title').val(row.title || '');
             $('#yearInput').val(row.year || '');
-            // row.category_code è il code; se non c'è, uso row.category
             $('#category').val(row.category_code || row.category || $('#category option:first').val());
             $('#frequencyInput').val(row.frequency || 'annuale');
             $('#notes').val(row.notes || '');
             $('#currentFileHelp').text(row.file_path
                 ? ('File attuale: ' + fmtFileName(row.file_path))
                 : 'Nessun file caricato');
+
+            // in MODIFICA i campi devono essere sempre editabili subito
+            setFormFieldsEnabled(true);
+            $('#suggestStatus').text('Puoi modificare i campi o caricare un nuovo file.');
+
             const modal = getDocModalInstance();
             modal.show();
+        }
+
+        function applySuggestions(data) {
+            if (!data) data = {};
+            if (data.year) {
+                $('#yearInput').val(data.year);
+            }
+            if (data.category) {
+                $('#category').val(data.category);
+            }
+            if (data.frequency) {
+                $('#frequencyInput').val(data.frequency);
+            }
+            // Una volta arrivati i suggerimenti, abilito sempre i campi
+            setFormFieldsEnabled(true);
+        }
+
+        function requestSuggestionsIfReady() {
+            const title = ($('#title').val() || '').trim();
+            const fileInput = document.getElementById('attachment');
+            const file = fileInput && fileInput.files && fileInput.files[0];
+
+            if (!title || !file) {
+                return;
+            }
+
+            $('#suggestStatus').text('Calcolo suggerimenti dal file…');
+            setFormFieldsEnabled(false);
+
+            const fd = new FormData();
+            fd.append('title', title);
+            fd.append('attachment', file);
+
+            $.ajax({
+                url: '/api/company-docs/suggest-metadata',
+                method: 'POST',
+                processData: false,
+                contentType: false,
+                data: fd
+            })
+                .done(function (resp) {
+                    applySuggestions(resp || {});
+                    $('#suggestStatus').text('Suggerimenti compilati automaticamente. Verifica e modifica se necessario.');
+                })
+                .fail(function (xhr) {
+                    $('#suggestStatus').text('Suggerimenti non disponibili. Compila i campi manualmente.');
+                    // in errore li sblocco comunque
+                    setFormFieldsEnabled(true);
+                });
         }
 
         // ---------- events ----------
@@ -238,11 +305,9 @@
 
         // Apertura modale da bottone "+ Aggiungi"
         docModalEl.addEventListener('show.bs.modal', function (e) {
-            // se viene dal bottone "+ Aggiungi", reset
             if (e.relatedTarget && e.relatedTarget.matches('button')) {
-                resetForm();
-                const now = new Date();
-                $('#yearInput').val(now.getFullYear());
+                // nuovo documento
+                openModalForNew();
             }
         });
 
@@ -259,6 +324,16 @@
             $.post('/api/company-docs/delete', { id: row.id })
                 .done(loadDocs)
                 .fail(xhr => alert('Errore eliminazione: ' + (xhr?.responseJSON?.detail || xhr?.responseText || '')));
+        });
+
+        // Suggerimenti: trigger quando selezioni file e quando finisci di scrivere il titolo
+        $('#attachment').on('change', function () {
+            $('#currentFileHelp').text(this.files && this.files[0] ? 'File selezionato: ' + this.files[0].name : '');
+            requestSuggestionsIfReady();
+        });
+
+        $('#title').on('blur', function () {
+            requestSuggestionsIfReady();
         });
 
         $('#saveDocBtn').on('click', function () {

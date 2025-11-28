@@ -16,4 +16,5 @@ openpyxl
 mysql-connector-python
 bcrypt
 python-multipart
- 
+groq
+pypdf
