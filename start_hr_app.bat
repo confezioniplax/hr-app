@@ -42,7 +42,7 @@ if exist "%APPDIR%\requirements_installed.txt" (
 
 :: Avvia l'app FastAPI
 echo [PLAX HR] Avvio server...
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 >> "%APPDIR%\hr_app.log" 2>&1
 
 echo [PLAX HR] Server terminato.
 pause
