@@ -549,6 +549,60 @@
             });
         }
     })();
+
+
+            // ----------------- Nuovo tipo di certificazione -----------------
+                $('#createCertTypeBtn').on('click', function () {
+                    const $btn = $(this);
+                    const $form = $('#newCertTypeForm');
+
+                    // Validazione HTML5 (campo code required)
+                    if (!$form[0].checkValidity()) {
+                        $form[0].reportValidity();
+                        return;
+                    }
+
+                    const code = $form.find('[name="code"]').val().trim();
+                    const payload = $form.serialize();
+
+                    $btn.prop('disabled', true);
+
+                    $.post('/api/hr/certs/types/create', payload)
+                        .done(function () {
+                            // chiudo la modale "Nuovo tipo"
+                            const modalEl = document.getElementById('newCertTypeModal');
+                            const modal = bootstrap.Modal.getInstance(modalEl);
+                            if (modal) {
+                                modal.hide();
+                            }
+
+                            // resetto il form
+                            $form[0].reset();
+
+                            // ricarico i tipi nella select dell'altra modale
+                            // e provo a selezionare il codice appena creato
+                            loadCertTypes(null).then(function () {
+                                const $sel = $('#certTypeSelect');
+                                $sel.find('option').each(function () {
+                                    if ($(this).text().trim().toUpperCase() === code.toUpperCase()) {
+                                        $(this).prop('selected', true);
+                                    }
+                                });
+                                // ricalcolo eventuale scadenza automatica
+                                tryAutofillExpiry();
+                            });
+                        })
+                        .fail(function (xhr) {
+                            alert(
+                                'Errore creazione tipo certificazione: ' +
+                                (xhr?.responseJSON?.detail || xhr?.responseText || '')
+                            );
+                        })
+                        .always(function () {
+                            $btn.prop('disabled', false);
+                        });
+                });
+
 </script>
 
 {% endblock %}
