@@ -44,14 +44,22 @@ class QuerySqlCompanyDocs:
                 cd.year,
                 cd.category,
                 cat.label AS category_label,
+                cd.deadline_rule_id,
+                cd.reference_date,
+                cd.next_due_date,
                 cd.frequency,
                 cd.notes,
                 cd.file_path,
+                dr.document_name AS rule_name,
+                dr.expiry_years AS rule_expiry_years,
+                dr.trigger_event AS rule_trigger_event,
                 cd.created_at,
                 cd.updated_at
             FROM {QuerySqlCompanyDocs.table()} cd
             LEFT JOIN company_doc_categories cat
                    ON cat.code = cd.category
+            LEFT JOIN company_document_deadline_rules dr
+                   ON dr.id = cd.deadline_rule_id
             {where}
             ORDER BY
                 cd.year DESC,
@@ -70,14 +78,22 @@ class QuerySqlCompanyDocs:
                 cd.year,
                 cd.category,
                 cat.label AS category_label,
+                cd.deadline_rule_id,
+                cd.reference_date,
+                cd.next_due_date,
                 cd.frequency,
                 cd.notes,
                 cd.file_path,
+                dr.document_name AS rule_name,
+                dr.expiry_years AS rule_expiry_years,
+                dr.trigger_event AS rule_trigger_event,
                 cd.created_at,
                 cd.updated_at
             FROM {QuerySqlCompanyDocs.table()} cd
             LEFT JOIN company_doc_categories cat
                    ON cat.code = cd.category
+            LEFT JOIN company_document_deadline_rules dr
+                   ON dr.id = cd.deadline_rule_id
             WHERE cd.id = %s
             LIMIT 1
         """
@@ -87,8 +103,8 @@ class QuerySqlCompanyDocs:
     def insert_doc_sql() -> str:
         return f"""
             INSERT INTO {QuerySqlCompanyDocs.table()}
-                (title, year, category, frequency, notes, file_path, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
+                (title, year, category, deadline_rule_id, reference_date, next_due_date, frequency, notes, file_path, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
         """
 
     # UPDATE senza cambiare file_path
@@ -96,12 +112,15 @@ class QuerySqlCompanyDocs:
     def update_doc_without_file_sql() -> str:
         return f"""
             UPDATE {QuerySqlCompanyDocs.table()}
-            SET title      = %s,
-                year       = %s,
-                category   = %s,
-                frequency  = %s,
-                notes      = %s,
-                updated_at = NOW()
+            SET title           = %s,
+                year            = %s,
+                category        = %s,
+                deadline_rule_id= %s,
+                reference_date  = %s,
+                next_due_date   = %s,
+                frequency       = %s,
+                notes           = %s,
+                updated_at      = NOW()
             WHERE id = %s
         """
 
@@ -110,13 +129,16 @@ class QuerySqlCompanyDocs:
     def update_doc_with_file_sql() -> str:
         return f"""
             UPDATE {QuerySqlCompanyDocs.table()}
-            SET title      = %s,
-                year       = %s,
-                category   = %s,
-                frequency  = %s,
-                notes      = %s,
-                file_path  = %s,
-                updated_at = NOW()
+            SET title           = %s,
+                year            = %s,
+                category        = %s,
+                deadline_rule_id= %s,
+                reference_date  = %s,
+                next_due_date   = %s,
+                frequency       = %s,
+                notes           = %s,
+                file_path       = %s,
+                updated_at      = NOW()
             WHERE id = %s
         """
 

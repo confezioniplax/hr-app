@@ -57,6 +57,10 @@ class CompanyDocsService:
         rows = self.repo.list_categories()
         return self._encode(rows)
 
+    def list_deadline_rules(self, *, category_code: Optional[str] = None, q: Optional[str] = None, active_only: bool = True) -> List[Dict[str, Any]]:
+        rows = self.repo.list_deadline_rules(category_code=category_code, q=q, active_only=active_only)
+        return self._encode(rows)
+
     # -------- GET --------
     def get_doc(self, doc_id: int) -> Optional[Dict[str, Any]]:
         row = self.repo.get_doc(doc_id)
@@ -69,11 +73,13 @@ class CompanyDocsService:
         id: Optional[int],
         title: str,
         year: int,
-        category: str,              # 👈 deve essere IL CODE (es. 'VAL_RISCHI', 'ASS', 'IMPIANTI_MAC')
+        category: str,
         frequency: str,
         notes: Optional[str],
         file_bytes: Optional[bytes],
         original_filename: Optional[str],
+        deadline_rule_id: Optional[int] = None,
+        reference_date: Optional[str] = None,
     ) -> int:
         """
         Se arriva un file, lo salva su disco e passa il file_path al repository.
@@ -105,16 +111,64 @@ class CompanyDocsService:
                 content=file_bytes,
             )
 
-        # 3) delega al repo l'upsert
+        dr_id: Optional[int] = None
+        if deadline_rule_id is not None:
+            dr_id = int(deadline_rule_id)
+            # Cerca la regola per ID, senza filtrare per category_code.
+            # Se la regola esiste, VINCE la sua category su quella del form.
+            rules = self.repo.list_deadline_rules(rule_id=dr_id, active_only=True)
+            if not rules:
+                raise ValueError("Regola scadenza non valida o inesistente")
+            
+            rule = rules[0]
+            # Sovrascrivo la categoria con quella della regola
+            category_code = rule["category_code"]
+
+        ref_date: Optional[str] = None
+        if reference_date:
+            ref_date = reference_date.strip() or None
+
+        next_due: Optional[str] = None
+        if dr_id is not None and ref_date:
+            # Ricerco la regola (già caricata sopra in teoria, ma qui la riuso se ho dr_id)
+            rule = next((r for r in self.repo.list_deadline_rules(rule_id=dr_id, active_only=True)), None)
+            if rule:
+                years = float(rule.get("expiry_years") or 0)
+                from datetime import datetime
+                try:
+                    d = datetime.strptime(ref_date, "%Y-%m-%d")
+                    if years == 0:
+                        next_due = None
+                    elif abs(years - 0.50) < 1e-9:
+                        m = d.month + 6
+                        y = d.year + (m - 1) // 12
+                        m = ((m - 1) % 12) + 1
+                        import calendar
+                        day = min(d.day, calendar.monthrange(y, m)[1])
+                        next_due = f"{y:04d}-{m:02d}-{day:02d}"
+                    else:
+                        months = round(years * 12)
+                        m = d.month + months
+                        y = d.year + (m - 1) // 12
+                        m = ((m - 1) % 12) + 1
+                        import calendar
+                        day = min(d.day, calendar.monthrange(y, m)[1])
+                        next_due = f"{y:04d}-{m:02d}-{day:02d}"
+                except Exception:
+                    next_due = None
+
         return int(
             self.repo.upsert_doc(
                 id=id,
                 title=title,
                 year=int(year),
                 category=category_code,
+                deadline_rule_id=dr_id,
+                reference_date=ref_date,
+                next_due_date=next_due,
                 frequency=frequency,
                 notes=notes,
-                file_path=file_path,  # None => non modificare
+                file_path=file_path,
             )
         )
 

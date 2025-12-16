@@ -931,3 +931,310 @@ SET @sql := (
   )
 );
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ==========================================================
+-- PATCH "NO BREAK" — Scadenze documenti aziendali
+-- Obiettivo: aggiungere gestione scadenze SENZA rompere il programma
+-- Assunzioni: sei già dentro al DB corretto (USE plax;)
+-- ==========================================================
+
+USE plax;
+
+-- ----------------------------------------------------------
+-- 1) HARDEN company_documents (retro-compatibile)
+--    Evita insert falliti se il programma non passa created_at/updated_at
+-- ----------------------------------------------------------
+ALTER TABLE company_documents
+  MODIFY created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  MODIFY updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
+
+-- ----------------------------------------------------------
+-- 2) Tabella regole scadenze (NUOVA, non rompe nulla)
+-- ----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS company_document_deadline_rules (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+
+  category_code VARCHAR(40) NOT NULL,
+  document_name VARCHAR(255) NOT NULL,
+
+  expiry_years DECIMAL(6,2) NOT NULL
+    COMMENT 'Years. Examples: 0 (event), 0.50 (6 months), 1, 2, 3, 5, 15',
+
+  trigger_event ENUM('PERIODIC','NEW_EMPLOYEE','ON_DEMAND') NOT NULL DEFAULT 'PERIODIC'
+    COMMENT 'PERIODIC=time-based; NEW_EMPLOYEE=on hire; ON_DEMAND=manual',
+
+  description TEXT NOT NULL,
+
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_deadline_rules_category
+    FOREIGN KEY (category_code)
+    REFERENCES company_doc_categories(code)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+
+  UNIQUE KEY uq_deadline_rules (category_code, document_name),
+  KEY idx_deadline_rules_category (category_code),
+  KEY idx_deadline_rules_active (is_active),
+  KEY idx_deadline_rules_trigger (trigger_event)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------
+-- 3) Link opzionale da documenti reali -> regola (NULLABLE)
+--    Non rompe nulla: il tuo programma può continuare a ignorarlo
+-- ----------------------------------------------------------
+ALTER TABLE company_documents
+  ADD COLUMN deadline_rule_id INT NULL AFTER category;
+
+CREATE INDEX idx_company_documents_deadline_rule
+  ON company_documents (deadline_rule_id);
+
+ALTER TABLE company_documents
+  ADD CONSTRAINT fk_company_documents_deadline_rule
+    FOREIGN KEY (deadline_rule_id)
+    REFERENCES company_document_deadline_rules(id)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL;
+
+-- ----------------------------------------------------------
+-- 4) Campi opzionali per scheduler (NULLABLE)
+--    reference_date: data da cui parte la scadenza
+--    next_due_date: prossima scadenza calcolata
+-- ----------------------------------------------------------
+ALTER TABLE company_documents
+  ADD COLUMN reference_date DATE NULL AFTER year,
+  ADD COLUMN next_due_date DATE NULL AFTER reference_date;
+
+CREATE INDEX idx_company_documents_next_due
+  ON company_documents (next_due_date);
+
+-- ----------------------------------------------------------
+-- 5) (FACOLTATIVO) Query di calcolo next_due_date
+--    Da eseguire quando:
+--      - deadline_rule_id è valorizzato
+--      - reference_date è valorizzata
+--    Nota: gestisce 0.50 anni come 6 mesi
+-- ----------------------------------------------------------
+/*
+UPDATE company_documents d
+JOIN company_document_deadline_rules r ON r.id = d.deadline_rule_id
+SET d.next_due_date = CASE
+  WHEN r.expiry_years = 0 THEN NULL
+  WHEN r.expiry_years = 0.50 THEN DATE_ADD(d.reference_date, INTERVAL 6 MONTH)
+  ELSE DATE_ADD(d.reference_date, INTERVAL ROUND(r.expiry_years * 12) MONTH)
+END
+WHERE d.deadline_rule_id IS NOT NULL
+  AND d.reference_date IS NOT NULL;
+*/
+USE plax;
+
+INSERT INTO company_document_deadline_rules
+(category_code, document_name, expiry_years, trigger_event, description)
+VALUES
+
+-- =========================
+-- AMBIENTE
+-- =========================
+('AMB','Autorizzazione AUA / AIA',15,'PERIODIC',
+ 'Autorizzazione unica ambientale per emissioni, scarichi e rifiuti; validità 15 anni salvo modifiche impiantistiche.'),
+
+-- =========================
+-- APPALTI
+-- =========================
+('APPALTI','Elenco aziende appaltatrici',1,'PERIODIC',
+ 'Aggiornamento annuale delle imprese che operano in sito per gestione DUVRI e idoneità tecnico-professionale.'),
+
+('APPALTI','Verifica idoneità tecnico-professionale',1,'PERIODIC',
+ 'Controllo annuale dei requisiti di sicurezza delle ditte appaltatrici ai sensi dell’art. 26 D.Lgs. 81/08.'),
+
+-- =========================
+-- EMERGENZA
+-- =========================
+('EMERGENZA','Controlli antincendio interni',1,'PERIODIC',
+ 'Verifica documentata delle misure di prevenzione incendi e gestione emergenze ai sensi del DPR 151/2011.'),
+
+('EMERGENZA','CPI / SCIA antincendio',5,'PERIODIC',
+ 'Certificato Prevenzione Incendi o SCIA antincendio con rinnovo quinquennale.'),
+
+('EMERGENZA','Formazione addetti antincendio',5,'PERIODIC',
+ 'Formazione e aggiornamento quinquennale degli addetti antincendio.'),
+
+('EMERGENZA','Prova di evacuazione',0.50,'PERIODIC',
+ 'Esecuzione e registrazione della prova di evacuazione aziendale con verbale; cadenza almeno semestrale.'),
+
+-- =========================
+-- EMISSIONI ATMOSFERA
+-- =========================
+('ATM','Riesame descrizione emissioni',1,'PERIODIC',
+ 'Verifica annuale dei punti di emissione, sostanze emesse e quantità autorizzate.'),
+
+('ATM','Autorizzazione emissioni in atmosfera',15,'PERIODIC',
+ 'Autorizzazione ex art. 269/281 D.Lgs. 152/06; validità massima 15 anni.'),
+
+('ATM','Analisi annuali emissioni convogliate',1,'PERIODIC',
+ 'Misure analitiche annuali dei parametri emissivi previste dall’autorizzazione.'),
+
+('ATM','Piano gestione solventi',1,'PERIODIC',
+ 'Documento obbligatorio VOC con verifica annuale consumi e bilancio solventi.'),
+
+('ATM','Verifica efficienza centrale termica',2,'PERIODIC',
+ 'Controllo biennale dell’efficienza energetica ai sensi del DPR 74/2013.'),
+
+-- =========================
+-- FORMAZIONE / NUOVO DIPENDENTE
+-- =========================
+('FORM_ADESTR','Informazione sui rischi (nuovo dipendente)',0,'NEW_EMPLOYEE',
+ 'Consegna informazioni su rischi, emergenze e figure della sicurezza con firma.'),
+
+('FORM_ADESTR','Formazione generale sicurezza (nuovo dipendente)',0,'NEW_EMPLOYEE',
+ 'Formazione obbligatoria di base sicurezza prima dell’operatività.'),
+
+('FORM_ADESTR','Formazione specifica mansione (nuovo dipendente)',0,'NEW_EMPLOYEE',
+ 'Formazione sui rischi specifici della mansione assegnata.'),
+
+('FORM_ADESTR','Addestramento pratico operativo (nuovo dipendente)',0,'NEW_EMPLOYEE',
+ 'Addestramento pratico documentato su macchine e procedure.'),
+
+('FORM_ADESTR','Consegna e registrazione DPI (nuovo dipendente)',0,'NEW_EMPLOYEE',
+ 'Assegnazione DPI adeguati e firma di presa in carico.'),
+
+('FORM_ADESTR','Inserimento in sorveglianza sanitaria (nuovo dipendente)',0,'NEW_EMPLOYEE',
+ 'Inserimento nel protocollo sanitario e pianificazione visite.'),
+
+('FORM_ADESTR','Giudizio di idoneità alla mansione (nuovo dipendente)',0,'NEW_EMPLOYEE',
+ 'Giudizio del Medico Competente per mansioni soggette a sorveglianza sanitaria.'),
+
+('FORM_ADESTR','Aggiornamento elenco dipendenti e mansioni (nuovo dipendente)',0,'NEW_EMPLOYEE',
+ 'Aggiornamento anagrafica aziendale, mansione e reparto.'),
+
+('FORM_ADESTR','Verifica impatto su DVR e valutazioni rischi (nuovo dipendente)',0,'NEW_EMPLOYEE',
+ 'Verifica introduzione di nuovi rischi o esposizioni non valutate.'),
+
+('FORM_ADESTR','Informazione su procedure di emergenza (nuovo dipendente)',0,'NEW_EMPLOYEE',
+ 'Illustrazione vie di esodo, punti di raccolta e comportamenti in emergenza.'),
+
+-- =========================
+-- RIFIUTI
+-- =========================
+('RIF','Riesame produzione rifiuti',1,'PERIODIC',
+ 'Verifica annuale tipologie, codici CER e quantità prodotte.'),
+
+('RIF','Iscrizione Albo Gestori Ambientali',5,'PERIODIC',
+ 'Iscrizione per trasporto o stoccaggio rifiuti; validità quinquennale.'),
+
+('RIF','MUD – dichiarazione annuale',1,'PERIODIC',
+ 'Comunicazione annuale dei rifiuti prodotti alle Camere di Commercio.'),
+
+-- =========================
+-- IMPIANTI E MACCHINARI
+-- =========================
+('IMPIANTI_MAC','Verifica apparecchi a pressione (PED)',1,'PERIODIC',
+ 'Verifica periodica annuale delle apparecchiature in pressione.'),
+
+('IMPIANTI_MAC','Verifica macchine di sollevamento',1,'PERIODIC',
+ 'Verifica annuale dell’integrità strutturale e dei dispositivi di sicurezza.'),
+
+('IMPIANTI_MAC','Verifica messa a terra – luoghi ordinari',2,'PERIODIC',
+ 'Verifica periodica impianto di terra ai sensi del DPR 462/01.'),
+
+('IMPIANTI_MAC','Verifica messa a terra – luoghi speciali',5,'PERIODIC',
+ 'Verifica quinquennale impianto di terra in ambienti a maggior rischio.'),
+
+('IMPIANTI_MAC','Manutenzione e verifica linea vita copertura',1,'PERIODIC',
+ 'Ispezione e manutenzione annuale del sistema anticaduta con verbale.'),
+
+('IMPIANTI_MAC','Programma manutenzioni',1,'PERIODIC',
+ 'Piano annuale degli interventi di manutenzione preventiva e correttiva.'),
+
+-- =========================
+-- INQUADRAMENTO AZIENDA
+-- =========================
+('INQ','Visura camerale',1,'PERIODIC',
+ 'Documento camerale aggiornato annualmente.'),
+
+('INQ','Elenco sostanze chimiche',1,'PERIODIC',
+ 'Inventario sostanze chimiche e SDS aggiornato.'),
+
+-- =========================
+-- NOMINE
+-- =========================
+('NOMINE','Elezione RLS',3,'PERIODIC',
+ 'Rinnovo della carica RLS secondo accordi applicati.'),
+
+('NOMINE','Nomina addetti emergenza incendio',5,'PERIODIC',
+ 'Nomina addetti emergenza con requisito formativo quinquennale.'),
+
+('NOMINE','Nomina addetti primo soccorso',3,'PERIODIC',
+ 'Nomina addetti primo soccorso con aggiornamento triennale.'),
+
+-- =========================
+-- IDRICO
+-- =========================
+('IDR','Riesame scarichi idrici',1,'PERIODIC',
+ 'Verifica annuale dei punti di scarico e limiti autorizzativi.'),
+
+('IDR','Autorizzazione scarichi reflui',4,'PERIODIC',
+ 'Autorizzazione allo scarico reflui con validità quadriennale.'),
+
+('IDR','Analisi acque reflue',1,'PERIODIC',
+ 'Analisi annuali dei reflui industriali.'),
+
+-- =========================
+-- SORVEGLIANZA SANITARIA
+-- =========================
+('SORV_SAN','Giudizi di idoneità',1,'PERIODIC',
+ 'Visite periodiche dei lavoratori secondo protocollo sanitario.'),
+
+-- =========================
+-- SUOLO / SOTTOSUOLO
+-- =========================
+('SAS','Riesame procedure suolo e sottosuolo',1,'PERIODIC',
+ 'Verifica annuale delle procedure di prevenzione contaminazioni.'),
+
+-- =========================
+-- VALUTAZIONE DEI RISCHI
+-- =========================
+('VAL_RISCHI','Documento di Valutazione dei Rischi (DVR)',3,'PERIODIC',
+ 'Riesame triennale del DVR con aggiornamenti immediati in caso di variazioni.'),
+
+('VAL_RISCHI','Valutazione rischio chimico',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Valutazione rischio cancerogeni',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Valutazione rischio biologico',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Valutazione rischio rumore',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Valutazione vibrazioni',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Movimentazione manuale carichi',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Movimenti ripetitivi arto superiore',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Rischio incendio',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','ATEX',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','VDT',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Rischi minori e apprendisti',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Stress lavoro-correlato',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Rischi interferenziali',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Rischio fulminazione',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Spazi confinati',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Lavori in quota',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Rischio sismico',3,'PERIODIC','Riesame triennale.'),
+('VAL_RISCHI','Agenti fisici vari',3,'PERIODIC','Riesame triennale.'),
+
+-- =========================
+-- VARIE / CERTIFICAZIONI
+-- =========================
+('VARIE','Certificazione ISO 45001',3,'PERIODIC','Certificazione salute e sicurezza sul lavoro.'),
+('VARIE','Certificazione ISO 9001',3,'PERIODIC','Certificazione sistema qualità.'),
+('VARIE','Certificazione ISO 14001',3,'PERIODIC','Certificazione sistema ambientale.'),
+('VARIE','Audit di sorveglianza ISO',1,'PERIODIC','Audit annuale dell’ente di certificazione.'),
+
+-- =========================
+-- IMPIANTI SPECIALI
+-- =========================
+('IMPIANTI_MAC','Verifica annuale carrelli elevatori',1,'PERIODIC',
+ 'Controllo periodico documentato del carrello elevatore.'),
+
+('IMPIANTI_MAC','Controllo perdite F-GAS',1,'PERIODIC',
+ 'Verifica annuale impianti con gas fluorurati sopra soglia.'),
+
+('IMPIANTI_MAC','Registro apparecchiature F-GAS',1,'PERIODIC',
+ 'Aggiornamento annuale del registro F-GAS.');

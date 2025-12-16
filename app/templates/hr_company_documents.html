@@ -58,13 +58,15 @@
         <div class="card-body">
             <table class="table table-bordered table-striped w-100" id="docsTable">
                 <thead>
+
                     <tr>
-                        <th style="width:30%">Titolo</th>
-                        <th style="width:10%">Anno</th>
-                        <th style="width:18%">Categoria</th>
-                        <th style="width:14%">Frequenza</th>
-                        <th style="width:14%">File</th>
-                        <th style="width:14%">Azioni</th>
+                        <th style="width:28%">Titolo</th>
+                        <th style="width:8%">Anno</th>
+                        <th style="width:16%">Categoria</th>
+                        <th style="width:16%">Tipo</th>
+                        <th style="width:12%">Frequenza</th>
+                        <th style="width:10%">File</th>
+                        <th style="width:10%">Azioni</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -142,6 +144,31 @@
                             </select>
                         </div>
 
+                        <!-- 4b: TIPO DOCUMENTO / REGOLA SCADENZA (menu a tendina con ricerca) -->
+                        <div class="col-md-4 position-relative">
+                            <label class="form-label">Tipo documento</label>
+                            <input type="text" id="deadlineRuleQuery" class="form-control" placeholder="Cerca tipo documento" autocomplete="off" style="padding-right: 3.5rem;">
+                            <!-- Spinner spostato a sinistra -->
+                            <div id="deadlineRuleLoading" class="position-absolute" style="right: 2.5rem; top: 2.6rem; display: none;">
+                              <div class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></div>
+                            </div>
+                            <!-- Bottone X per pulire -->
+                            <button type="button" id="deadlineRuleClear" class="btn btn-sm position-absolute text-secondary" 
+                                    style="right: 0.5rem; top: 2.3rem; font-size: 1.5rem; line-height: 1; border: none; background: transparent; padding: 0; z-index: 10;" 
+                                    title="Rimuovi selezione" tabindex="-1">
+                                &times;
+                            </button>
+                            <input type="hidden" name="deadline_rule_id" id="deadlineRuleIdHidden" value="">
+                            <div id="deadlineRulesDropdown" class="dropdown-menu w-100" style="max-height: 300px; overflow:auto; z-index: 2000;"></div>
+                            <div class="form-text">Digita almeno 2 caratteri e scegli dalla lista (opzionale).</div>
+                        </div>
+
+                        <!-- 4c: Data riferimento scadenza -->
+                        <div class="col-md-4">
+                            <label class="form-label">Data riferimento</label>
+                            <input type="date" class="form-control" name="reference_date" id="referenceDate" disabled>
+                        </div>
+
                         <!-- 5: NOTE (facoltative ma disabilitate finché non arriva sugg.) -->
                         <div class="col-md-12">
                             <label class="form-label">Note</label>
@@ -179,6 +206,7 @@
             $('#yearInput').prop('disabled', !enabled);
             $('#category').prop('disabled', !enabled);
             $('#frequencyInput').prop('disabled', !enabled);
+            $('#referenceDate').prop('disabled', !enabled);
             $('#notes').prop('disabled', !enabled);
         }
 
@@ -188,6 +216,7 @@
             $('#currentFileHelp').text('');
             $('#suggestStatus').text('Inserisci titolo e scegli un file per ottenere i suggerimenti.');
             $('#attachment').val('');
+            if (typeof drResetSelection === 'function') drResetSelection();
             // su NUOVO documento i campi vengono bloccati in attesa suggerimenti
             setFormFieldsEnabled(false);
         }
@@ -204,10 +233,12 @@
                 (list || []).forEach(d => {
                     const tr = document.createElement('tr');
                     const catLabel = d.category_label || d.category || '';
+                    const ruleLabel = d.rule_name ? `${d.rule_name}` : '';
                     tr.innerHTML = `
                         <td>${d.title || ''}</td>
                         <td>${d.year || ''}</td>
                         <td>${catLabel}</td>
+                        <td>${ruleLabel}</td>
                         <td>${(d.frequency || '').toUpperCase()}</td>
                         <td>${fmtFileName(d.file_path)}</td>
                         <td>
@@ -243,6 +274,12 @@
                 ? ('File attuale: ' + fmtFileName(row.file_path))
                 : 'Nessun file caricato');
 
+            const selCat = $('#category').val();
+            const ruleName = row.rule_name || '';
+            $('#deadlineRuleIdHidden').val(row.deadline_rule_id || '');
+            $('#deadlineRuleQuery').val(ruleName ? `${ruleName}` : '');
+            $('#referenceDate').val(row.reference_date || '');
+
             // in MODIFICA i campi devono essere sempre editabili subito
             setFormFieldsEnabled(true);
             $('#suggestStatus').text('Puoi modificare i campi o caricare un nuovo file.');
@@ -264,7 +301,106 @@
             }
             // Una volta arrivati i suggerimenti, abilito sempre i campi
             setFormFieldsEnabled(true);
+            // popolazione del dropdown sarà a richiesta dell'utente digitando
         }
+
+        // ---- Dropdown ricerca per Tipo documento (regole scadenze) ----
+        const drqInput = document.getElementById('deadlineRuleQuery');
+        const drHidden = document.getElementById('deadlineRuleIdHidden');
+        const drMenu = document.getElementById('deadlineRulesDropdown');
+        const drSpinner = document.getElementById('deadlineRuleLoading');
+        let drDebounce;
+        let drController = null;
+
+        function drHideMenu() {
+            drMenu.classList.remove('show');
+            drMenu.innerHTML = '';
+        }
+
+        function drShowMenu(items) {
+            drMenu.innerHTML = '';
+            if (!items || items.length === 0) { drHideMenu(); return; }
+            items.forEach(it => {
+                const id = (it.id || '').toString();
+                const name = (it.document_name || '').trim();
+                const cat = (it.category_code || '').trim();
+                const years = parseFloat(it.expiry_years || 0);
+
+                if (!id) return;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'dropdown-item';
+                btn.textContent = cat ? `${name} (${cat})` : name;
+                btn.addEventListener('click', () => {
+                    drHidden.value = id;
+                    drqInput.value = btn.textContent;
+                    drHideMenu();
+                    
+                    // Auto-select category if present
+                    if (cat) {
+                        $('#category').val(cat);
+                    }
+                    
+                    // Auto-select frequency based on years
+                    let freq = '';
+                    if (Math.abs(years - 1.0) < 0.01) freq = 'annuale';
+                    else if (Math.abs(years - 0.5) < 0.01) freq = 'semestrale';
+                    else if (Math.abs(years - 2.0) < 0.01) freq = 'biennale';
+                    else if (Math.abs(years - 3.0) < 0.01) freq = 'triennale';
+                    else if (Math.abs(years - 4.0) < 0.01) freq = 'quadriennale';
+                    else if (Math.abs(years - 5.0) < 0.01) freq = 'quinquennale';
+                    
+                    if (freq) {
+                        $('#frequencyInput').val(freq);
+                    }
+                });
+                drMenu.appendChild(btn);
+            });
+            drMenu.classList.add('show');
+        }
+
+        function drSetInlineLoading(on) {
+            if (drSpinner) drSpinner.style.display = on ? 'block' : 'none';
+        }
+
+        async function drSearch(q, categoryCode) {
+            try {
+                drSetInlineLoading(true);
+                const params = new URLSearchParams({ category: categoryCode || '', q: q || '' });
+                if (drController) { try { drController.abort(); } catch (_) {} }
+                drController = new AbortController();
+                const res = await fetch(`/api/company-docs/deadline-rules?${params.toString()}`, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin', signal: drController.signal });
+                const data = await res.json();
+                drShowMenu(Array.isArray(data) ? data : []);
+            } catch (e) {
+                drHideMenu();
+            } finally {
+                drSetInlineLoading(false);
+                drController = null;
+            }
+        }
+
+        function drResetSelection() {
+            drHidden.value = '';
+            drqInput.value = '';
+            drHideMenu();
+        }
+
+        if (drqInput) {
+            drqInput.addEventListener('input', () => {
+                const q = (drqInput.value || '').trim();
+                // const cat = $('#category').val() || ''; // REMOVED: search globally
+                drHidden.value = '';
+                if (drDebounce) clearTimeout(drDebounce);
+                if (drController) { try { drController.abort(); } catch (_) {} drController = null; drSetInlineLoading(false); }
+                if (q.length < 2) { drHideMenu(); drSetInlineLoading(false); return; }
+                drDebounce = setTimeout(() => drSearch(q, null), 200);
+            });
+        }
+
+        document.addEventListener('click', (evt) => {
+            if (!drMenu.contains(evt.target) && evt.target !== drqInput) drHideMenu();
+        });
 
         function requestSuggestionsIfReady() {
             const title = ($('#title').val() || '').trim();
@@ -336,9 +472,14 @@
             requestSuggestionsIfReady();
         });
 
+        $('#category').on('change', function () {
+            drResetSelection();
+        });
+
         $('#saveDocBtn').on('click', function () {
             const fd = new FormData(document.getElementById('docForm'));
             if (!$('#docId').val()) fd.delete('id');  // se nuovo, non mandare id vuoto
+            if (!$('#deadlineRuleIdHidden').val()) fd.delete('deadline_rule_id');
 
             $('#saveDocBtn').prop('disabled', true);
             $.ajax({
@@ -353,7 +494,20 @@
                     loadDocs();
                 })
                 .fail(function (xhr) {
-                    alert('Errore salvataggio: ' + (xhr?.responseJSON?.detail || xhr?.responseText || ''));
+                    let msg = 'Errore salvataggio: ';
+                    if (xhr.responseJSON && xhr.responseJSON.detail) {
+                        if (typeof xhr.responseJSON.detail === 'object') {
+                            // Se è un array (es. validazione Pydantic) o oggetto
+                            msg += JSON.stringify(xhr.responseJSON.detail, null, 2);
+                        } else {
+                            msg += xhr.responseJSON.detail;
+                        }
+                    } else if (xhr.responseText) {
+                        msg += xhr.responseText;
+                    } else {
+                        msg += 'Errore sconosciuto';
+                    }
+                    alert(msg);
                 })
                 .always(function () {
                     $('#saveDocBtn').prop('disabled', false);

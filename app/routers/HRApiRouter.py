@@ -504,6 +504,19 @@ async def company_docs_categories(
         raise HTTPException(status_code=500, detail=f"Error listing company document categories: {str(e)}")
 
 
+@hr_api_router.get("/company-docs/deadline-rules")
+async def company_docs_deadline_rules(
+    category: Optional[str] = Query(default=None),
+    q: Optional[str] = Query(default=None),
+    service: CompanyDocsService = Depends(CompanyDocsService),
+    current_user: TokenData = Depends(get_current_manager),
+):
+    try:
+        rules = service.list_deadline_rules(category_code=(category or None), q=(q or None), active_only=True)
+        return JSONResponse(status_code=200, content=rules)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing deadline rules: {str(e)}")
+
 # -------- AI: SUGGERIMENTO METADATI DOCUMENTO --------
 @hr_api_router.post("/company-docs/suggest-metadata")
 async def company_docs_suggest_metadata(
@@ -549,6 +562,8 @@ async def company_docs_upsert(
     category: str = Form("ALTRO"),
     frequency: str = Form("annuale"),
     notes: Optional[str] = Form(default=None),
+    deadline_rule_id: Optional[int] = Form(default=None),
+    reference_date: Optional[str] = Form(default=None),
     attachment: UploadFile | None = File(None),
     service: CompanyDocsService = Depends(CompanyDocsService),
     current_user: TokenData = Depends(get_current_manager),
@@ -563,7 +578,7 @@ async def company_docs_upsert(
     try:
         file_bytes = await attachment.read() if attachment and attachment.filename else None
         doc_id = service.upsert_doc(
-            id=id,
+            id=_to_int_or_none(id),
             title=title,
             year=year,
             category=category,
@@ -571,6 +586,8 @@ async def company_docs_upsert(
             notes=notes,
             file_bytes=file_bytes,
             original_filename=attachment.filename if file_bytes else None,
+            deadline_rule_id=_to_int_or_none(deadline_rule_id),
+            reference_date=reference_date,
         )
         return JSONResponse(status_code=200, content={"message": "Document saved", "id": doc_id})
     except Exception as e:

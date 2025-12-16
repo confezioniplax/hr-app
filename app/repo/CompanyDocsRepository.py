@@ -54,6 +54,9 @@ class CompanyDocsRepository:
         title: str,
         year: int,
         category: str,
+        deadline_rule_id: Optional[int],
+        reference_date: Optional[str],
+        next_due_date: Optional[str],
         frequency: str,
         notes: Optional[str],
         file_path: Optional[str],
@@ -64,16 +67,47 @@ class CompanyDocsRepository:
         if id:
             if file_path is None:
                 sql = QuerySqlCompanyDocs.update_doc_without_file_sql()
-                params = [title, int(year), category, frequency, notes, int(id)]
+                params = [
+                    title,
+                    int(year),
+                    category,
+                    int(deadline_rule_id) if deadline_rule_id is not None else None,
+                    reference_date,
+                    next_due_date,
+                    frequency,
+                    notes,
+                    int(id),
+                ]
             else:
                 sql = QuerySqlCompanyDocs.update_doc_with_file_sql()
-                params = [title, int(year), category, frequency, notes, file_path, int(id)]
+                params = [
+                    title,
+                    int(year),
+                    category,
+                    int(deadline_rule_id) if deadline_rule_id is not None else None,
+                    reference_date,
+                    next_due_date,
+                    frequency,
+                    notes,
+                    file_path,
+                    int(id),
+                ]
             with self.db as db:
                 db.execute_query(sql, params, query_type=QueryType.UPDATE)
                 return int(id)
         else:
             sql = QuerySqlCompanyDocs.insert_doc_sql()
-            params = [title, int(year), category, frequency, notes, file_path]
+            params = [
+                title,
+                int(year),
+                category,
+                int(deadline_rule_id) if deadline_rule_id is not None else None,
+                reference_date,
+                next_due_date,
+                frequency,
+                notes,
+                file_path,
+            ]
             with self.db as db:
                 db.execute_query(sql, params, query_type=QueryType.INSERT)
                 row = db.execute_query(
@@ -82,6 +116,29 @@ class CompanyDocsRepository:
                     query_type=QueryType.GET,
                 )
                 return int(row["id"]) if row else 0
+
+    def list_deadline_rules(self, *, category_code: Optional[str] = None, q: Optional[str] = None, active_only: bool = True, rule_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        sql = [
+            "SELECT id, category_code, document_name, expiry_years, trigger_event, description, is_active",
+            "FROM company_document_deadline_rules",
+        ]
+        conds = []
+        params: List[Any] = []
+        if active_only:
+            conds.append("is_active = 1")
+        if rule_id is not None:
+            conds.append("id = %s")
+            params.append(rule_id)
+        if category_code:
+            conds.append("category_code = %s")
+            params.append(category_code)
+        if q:
+            conds.append("document_name LIKE %s")
+            params.append(f"%{q}%")
+        where = (" WHERE " + " AND ".join(conds)) if conds else ""
+        order = " ORDER BY category_code ASC, document_name ASC"
+        with self.db as db:
+            return db.execute_query("\n".join(sql) + where + order, params if params else None, query_type=QueryType.GET)
 
     # ==========================
     #  DELETE
